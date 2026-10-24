@@ -12,7 +12,7 @@ only when its gate passes in Docker and the work is committed to `main`.
 | M3 | Kociemba two-phase + table manifest | 1,000 random cubes solved, ≤30 moves, deterministic, replayed |
 | M4 | WASM wrapper + static site + Pages | headless browser solves a seeded scramble end-to-end |
 | M5 | Docs polish, RL guide, benchmarks | external user can train a toy agent from the README |
-| M6 | Optional optimal oracle | superflip proven at distance 20 |
+| M6 | Optional optimal oracle | Partial | superflip proven at distance 20 |
 
 ## Delivered vs deferred (M5)
 

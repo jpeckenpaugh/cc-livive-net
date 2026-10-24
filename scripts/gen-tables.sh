@@ -8,4 +8,14 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-exec "$ROOT/scripts/docker.sh" cargo run --release -p color-cube-solver --bin gen-tables -- "$@"
+
+# `--optimal` needs the solver's optional feature; every other flag does not.
+features=()
+for arg in "$@"; do
+  if [ "$arg" = "--optimal" ]; then
+    features=(--features optimal)
+  fi
+done
+
+exec "$ROOT/scripts/docker.sh" cargo run --release -p color-cube-solver \
+  ${features[@]+"${features[@]}"} --bin gen-tables -- "$@"

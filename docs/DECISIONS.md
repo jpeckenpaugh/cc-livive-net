@@ -339,6 +339,23 @@ not an error.
 **Consequence.** No panic crosses the boundary, and the JS API stays
 BigInt-free. The `u32` seed space is a documented stable subset.
 
+## D029 — The optimal oracle is partial: superflip is not proved
+
+**Context.** M6's acceptance requires superflip = 20. The oracle was built with
+`max(corner PDB 88M, edgeA PDB 42.6M, edgeB PDB 42.6M)`.
+`h(superflip) = 8` because its corners are already solved, and a 5-minute run
+exhausted depth 15 (3.64B nodes) and timed out inside bound 16. The remaining
+bounds are orders of magnitude larger.
+**Decision.** Ship the oracle feature-gated and document it as partial. Do not
+sum the edge tables (not admissible: a face turn moves pieces in both groups),
+do not hard-code 20, and do not claim optimality after a timeout. M6 stays
+"partial" rather than "done".
+**Consequence.** `optimal --moves` is a useful exact prover for shallow
+positions and a sanity check against Kociemba, but it cannot verify hard
+positions yet. Closing M6 requires stronger disjoint/additive pattern databases
+or symmetry reduction, which is a separate project.
+
+
 
 
 

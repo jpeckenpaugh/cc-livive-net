@@ -14,6 +14,7 @@ use color_cube_solver::thistlethwaite;
 fn main() -> ExitCode {
     let directory = tables::default_directory();
     let verify = std::env::args().any(|arg| arg == "--verify");
+    let optimal = std::env::args().any(|arg| arg == "--optimal");
     println!("generating tables into {}", directory.display());
 
     let (moves, move_timings) = tables::generate_with_timings();
@@ -127,10 +128,68 @@ fn main() -> ExitCode {
          kociemba={kociemba_total} bytes total={} bytes",
         move_total + distance_total + kociemba_total
     );
+    if optimal {
+        #[cfg(feature = "optimal")]
+        if let Err(error) = generate_optimal(&directory, &moves) {
+            eprintln!("failed to generate the optimal bundle: {error}");
+            return ExitCode::FAILURE;
+        }
+        #[cfg(not(feature = "optimal"))]
+        {
+            eprintln!("gen-tables was built without the `optimal` feature");
+            return ExitCode::FAILURE;
+        }
+    }
     if let Some(peak) = peak_rss_kb() {
         println!("peak_rss_kb={peak}");
     }
     ExitCode::SUCCESS
+}
+
+#[cfg(feature = "optimal")]
+fn generate_optimal(
+    directory: &std::path::Path,
+    moves: &tables::TableBundle,
+) -> std::io::Result<()> {
+    println!("generating optimal pattern databases (one at a time)");
+    let started = std::time::Instant::now();
+    let (report, timings) = color_cube_solver::optimal::generate_and_write(moves, directory)?;
+    let names = ["corner", "edge_a", "edge_b"];
+    for (slot, timing) in timings.iter().enumerate() {
+        println!(
+            "  {:<12} {:>8.3} s  {:>12} bytes",
+            names[slot],
+            timing.elapsed.as_secs_f64(),
+            [
+                color_cube_solver::optimal::CORNER_ROWS,
+                color_cube_solver::optimal::EDGE_ROWS,
+                color_cube_solver::optimal::EDGE_ROWS,
+            ][slot]
+        );
+    }
+    println!(
+        "optimal diameters: corner={} edge_a={} edge_b={}",
+        report.corner_max, report.edge_a_max, report.edge_b_max
+    );
+    println!(
+        "optimal coverage: corner={}/{} edge_a={}/{} edge_b={}/{} full={}",
+        report.corner_reached,
+        color_cube_solver::optimal::CORNER_ROWS,
+        report.edge_a_reached,
+        color_cube_solver::optimal::EDGE_ROWS,
+        report.edge_b_reached,
+        color_cube_solver::optimal::EDGE_ROWS,
+        report.fully_covered()
+    );
+    println!(
+        "optimal payload={} bytes elapsed={:.3} s",
+        color_cube_solver::optimal::CORNER_ROWS + 2 * color_cube_solver::optimal::EDGE_ROWS,
+        started.elapsed().as_secs_f64()
+    );
+    if !report.fully_covered() {
+        return Err(std::io::Error::other("optimal tables are incomplete"));
+    }
+    Ok(())
 }
 
 fn peak_rss_kb() -> Option<u64> {

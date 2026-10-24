@@ -11,7 +11,7 @@ Docker and was committed to `main`.
 | M3 | Kociemba two-phase, table manifest | Done | `feat(solver)` | 16–22 moves (mean 19.86), ≤30; median 245 ms, documented miss vs 50 ms |
 | M4 | WASM wrapper, browser demo, Pages | Done | `feat(wasm)` | Isometric canvas, Playwright smoke, Pages workflow |
 | M5 | README, RL/solver docs, licenses, benchmarks | Done | `docs(m5)` | Bench, dual license, `cargo doc` clean |
-| M6 | Optional optimal oracle | Not started | — | Optional; deferred |
+| M6 | Optional optimal oracle | Partial | `feat(optimal)` | Feature-gated IDA* + 3 PDBs; proves shallow distances, superflip not proved in 5 min |
 
 ## v1 definition of done
 

@@ -119,3 +119,26 @@ Both solvers apply their move list to a copy of the input and return
 `SolveError::NoSolutionWithinLimits` if the result is not solved. The CLI and
 the WASM smoke test replay independently, so a solution shown to a user is
 always a solved cube.
+
+## Optimal oracle (partial, feature-gated)
+
+`--features optimal` adds an IDA* oracle with three pattern databases:
+
+| table | states | generated | diameter |
+|---|---:|---:|---:|
+| corner (`cp_rank * 2187 + twist`) | 88,179,840 | 20.9 s | 11 |
+| edge group A (pieces 0–5) | 42,577,920 | 11.2 s | 10 |
+| edge group B (pieces 6–11) | 42,577,920 | 12.1 s | 10 |
+
+Bundle: 173,335,753 bytes (176 MB), generated in 44.6 s with 354 MiB peak RSS.
+The heuristic is `max(corner, edgeA, edgeB)`. The edge tables are **not summed**:
+a face turn can move pieces from both groups, so summation would not be
+admissible.
+
+It proves short distances exactly (a four-move scramble returns 4 moves with
+`deepest_exhausted = 3`) and agrees with or beats Kociemba on eight-turn
+scrambles. It does **not** yet prove superflip = 20: `h(superflip) = 8` (corners
+are solved), and a 5-minute run exhausted depth 15 and 3.6B nodes before timing
+out inside bound 16. Hardening needs stronger pattern databases or cost
+partitioning; see D029.
+

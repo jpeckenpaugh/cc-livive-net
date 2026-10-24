@@ -24,7 +24,7 @@ Measured, not aspirational. Dates and machine context are in
 | M3 | Kociemba two-phase | Done | 16–22 moves (mean 19.86), median 245–302 ms |
 | M4 | WASM wrapper, browser demo, Pages | Done | 7.71 MiB raw / 2.63 MiB gzip; 10 browser assertions |
 | M5 | Docs, licensing, benchmarks | Done | this README, `docs/RL.md`, `docs/SOLVERS.md`, `bench` |
-| M6 | Optional optimal oracle | Not started | optional |
+| M6 | Optional optimal oracle | Partial | proves short distances; superflip not proved in 5 min (D029) |
 
 ## Quick start
 

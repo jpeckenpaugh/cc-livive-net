@@ -505,9 +505,10 @@ pub fn default_directory() -> PathBuf {
     std::env::var_os("COLOR_CUBE_TABLES").map_or_else(|| PathBuf::from("./tables"), PathBuf::from)
 }
 
-const HEADER_LEN: usize = 4 + 2 + 4 + 8 + 8 + 8;
-const DIRECTORY_ENTRY_LEN: usize = 13;
-const CHECKSUM_OFFSET: usize = 26;
+pub(crate) const HEADER_LEN: usize = 4 + 2 + 4 + 8 + 8 + 8;
+pub(crate) const DIRECTORY_ENTRY_LEN: usize = 13;
+pub(crate) const CHECKSUM_OFFSET: usize = 26;
+pub(crate) const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 
 fn table_entries() -> [(u32, u32, u32, u8); 6] {
     [
@@ -554,7 +555,11 @@ fn read_u64(data: &[u8], offset: usize) -> u64 {
 
 /// FNV-1a, 64-bit.
 fn fnv1a64(data: &[u8]) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    fnv1a64_update(FNV_OFFSET, data)
+}
+
+/// Incremental FNV-1a, 64-bit.
+pub(crate) fn fnv1a64_update(mut hash: u64, data: &[u8]) -> u64 {
     for &byte in data {
         hash ^= u64::from(byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);

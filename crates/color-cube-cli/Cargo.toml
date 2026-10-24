@@ -12,3 +12,8 @@ workspace = true
 [dependencies]
 color-cube = { path = "../color-cube" }
 color-cube-solver = { path = "../color-cube-solver" }
+
+[features]
+default = []
+# Passthrough for the optional optimal oracle (M6).
+optimal = ["color-cube-solver/optimal"]

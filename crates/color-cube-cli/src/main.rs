@@ -24,9 +24,19 @@ fn main() -> ExitCode {
         "scramble" => scramble(&args[2..]),
         "check" => check(&args[2..]),
         "bench" => bench(&args[2..]),
+        "optimal" => {
+            #[cfg(feature = "optimal")]
+            {
+                optimal(&args[2..])
+            }
+            #[cfg(not(feature = "optimal"))]
+            {
+                Err("this binary was built without the `optimal` feature".into())
+            }
+        }
         "--help" | "-h" | "help" => {
             eprintln!(
-                "usage:\n  color-cube-cli solve --seed <u64> [--solver thistlethwaite|kociemba] [--time-ms N] [--max-length N]\n  color-cube-cli solve --moves \"U R2 F'\" [--solver ...]\n  color-cube-cli scramble --seed <u64> [--turns N]\n  color-cube-cli check --seed <u64>\n  color-cube-cli bench [--n N] [--warmup N] [--solver thistlethwaite|kociemba|both] [--gen]"
+                "usage:\n  color-cube-cli solve --seed <u64> [--solver thistlethwaite|kociemba] [--time-ms N] [--max-length N]\n  color-cube-cli solve --moves \"U R2 F'\" [--solver ...]\n  color-cube-cli optimal --seed <u64> | --moves \"...\" [--time-ms N] [--max-length N]\n  color-cube-cli scramble --seed <u64> [--turns N]\n  color-cube-cli check --seed <u64>\n  color-cube-cli bench [--n N] [--warmup N] [--solver thistlethwaite|kociemba|both] [--gen]"
             );
             Ok(())
         }
@@ -167,6 +177,97 @@ fn solve_kociemba(cube: &Cube, limits: Limits) -> Result<(), String> {
             }
         }
         Err(error) => Err(format!("solve failed: {error}")),
+    }
+}
+
+#[cfg(feature = "optimal")]
+fn optimal(args: &[String]) -> Result<(), String> {
+    use color_cube_solver::OptimalOracle;
+
+    let mut seed = None;
+    let mut moves = None;
+    let mut time_ms = Some(300_000u32);
+    let mut max_length = None;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--seed" => seed = Some(parse_next(args, &mut index)?),
+            "--moves" => moves = Some(next_value(args, &mut index)?),
+            "--time-ms" => time_ms = Some(parse_next(args, &mut index)?),
+            "--max-length" => max_length = Some(parse_next(args, &mut index)?),
+            other => return Err(format!("unknown optimal option: {other}")),
+        }
+    }
+    if seed.is_some() == moves.is_some() {
+        return Err("optimal requires exactly one of --seed or --moves".into());
+    }
+    let cube = if let Some(seed) = seed {
+        Cube::from_seed(seed)
+    } else {
+        let parsed = parse_moves(moves.as_deref().unwrap_or_default())
+            .map_err(|error| format!("invalid move list: {error}"))?;
+        let mut cube = Cube::SOLVED;
+        cube.apply_all(parsed.as_slice());
+        cube
+    };
+    let directory = tables::default_directory();
+    let load_started = Instant::now();
+    let oracle = OptimalOracle::load(&directory).map_err(|error| {
+        format!(
+            "failed to load optimal tables from {}: {error}",
+            directory.display()
+        )
+    })?;
+    eprintln!(
+        "loaded optimal tables in {:.3} s (diameters corner={} edge_a={} edge_b={})",
+        load_started.elapsed().as_secs_f64(),
+        oracle.diameters().0,
+        oracle.diameters().1,
+        oracle.diameters().2
+    );
+    let limits = Limits {
+        max_length,
+        time_ms,
+    };
+    let started = Instant::now();
+    let outcome = oracle.solve_with_stats(&cube, limits);
+    let stats = &outcome.stats;
+    let by_bound: Vec<String> = stats
+        .nodes_by_bound
+        .iter()
+        .enumerate()
+        .filter(|(_, &nodes)| nodes > 0)
+        .map(|(bound, &nodes)| format!("{bound}:{nodes}"))
+        .collect();
+    let summary = format!(
+        "solver=optimal h0={} bound={} deepest_exhausted={:?} nodes={} by_bound=[{}] elapsed_ms={:.3}",
+        stats.initial_h,
+        stats.bound,
+        stats.deepest_exhausted,
+        stats.nodes,
+        by_bound.join(","),
+        started.elapsed().as_secs_f64() * 1000.0
+    );
+    match &outcome.solution {
+        Ok(solution) => {
+            println!("{}", format_moves(&solution.moves));
+            eprintln!(
+                "total={} optimal={} {summary}",
+                solution.moves.len(),
+                solution.optimal
+            );
+            Ok(())
+        }
+        Err(SolveError::AlreadySolved) => {
+            println!();
+            eprintln!("{summary}");
+            Ok(())
+        }
+        Err(SolveError::TablesMissing) => Err("solve failed: optimal tables are missing".into()),
+        Err(error) => {
+            eprintln!("{summary}");
+            Err(format!("solve failed: {error}"))
+        }
     }
 }
 

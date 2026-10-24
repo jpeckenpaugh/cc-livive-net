@@ -11,3 +11,8 @@ workspace = true
 
 [dependencies]
 color-cube = { path = "../color-cube" }
+
+[features]
+default = []
+# Optional optimal oracle (M6). Native/CLI only; never enabled in the wasm build.
+optimal = []
