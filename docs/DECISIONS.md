@@ -72,3 +72,24 @@ the RL wrapper.
 SplitMix64 and hand-written property loops instead of `proptest`/`rand`.
 **Consequence.** `cargo test -p color-cube` works offline in `no_std`-adjacent
 conditions, and CI cannot accidentally pull a dependency into the core graph.
+
+## D009 — `Color` discriminants follow the spec's colour order, not face order
+
+**Context.** `concept.md` §3.2 fixes face order as `U R F D L B` but states the
+colour encoding as `U/D/F/B/R/L = 0..5`. Those are different orders, and it is an
+easy place to introduce a silent permutation bug.
+**Decision.** `Color` is a `#[repr(u8)]` enum with discriminants `U=0, D=1, F=2,
+B=3, R=4, L=5`, exactly as written in §3.2. Face order is only ever used for
+indexing facelets (`face_index * 9 + offset`).
+**Consequence.** Conversions between face index and colour are deliberate
+tables, never `as u8` arithmetic. Test fixtures must state both orders.
+
+## D010 — Invalid `Move` values are a documented panic
+
+**Context.** `Move(pub u8)` (required by `concept.md` §3.5) lets safe code
+construct `Move(200)`.
+**Decision.** `from_index` is the checked constructor. `apply`, `inverse`,
+`face`, `power`, and `quarter_turns` document a precondition that the index is
+`< 18` and panic otherwise. No masking, no silent no-op.
+**Consequence.** Internal code only ever builds moves via `ALL`/`from_index`.
+A total API can be added later as `try_apply` if a caller needs it.

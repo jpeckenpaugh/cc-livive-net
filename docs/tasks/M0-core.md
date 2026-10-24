@@ -78,8 +78,10 @@ hand-written SplitMix64 for pseudo-random cases:
    wrong center, duplicate piece, missing piece, twist violation, flip
    violation, parity violation.
 8. A move applied to a cube produces the expected permutation on a small,
-   hand-checked case (e.g. `U` maps `URF` corner piece from `URF` to `UBR`), so a
-   systematically wrong derivation cannot pass the identity tests alone.
+   hand-checked case (e.g. `U` maps the `URF` corner piece to position `UFL`,
+   i.e. `cpU = [UBR, URF, UFL, ULB, ...]`), so a systematically wrong derivation
+   cannot pass the identity tests alone. `URF -> UBR` is `U'`, not `U`; the
+   earlier wording of this brief had it backwards.
 
 ## Acceptance
 
