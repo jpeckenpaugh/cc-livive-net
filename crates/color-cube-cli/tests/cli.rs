@@ -6,7 +6,7 @@ use std::process::Command;
 use std::sync::OnceLock;
 
 use color_cube::{parse_moves, Cube};
-use color_cube_solver::Thistlethwaite;
+use color_cube_solver::{Kociemba, Thistlethwaite};
 
 fn directory() -> &'static PathBuf {
     static DIRECTORY: OnceLock<PathBuf> = OnceLock::new();
@@ -14,6 +14,7 @@ fn directory() -> &'static PathBuf {
         let path = std::env::temp_dir().join(format!("cc-cli-tables-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         Thistlethwaite::generate(&path).expect("generate CLI tables");
+        Kociemba::generate(&path).expect("generate CLI kociemba tables");
         path
     })
 }
@@ -41,6 +42,25 @@ fn solve_seed_prints_a_replayable_solution() {
     assert!(cube.is_solved());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("phases="), "stderr: {stderr}");
+}
+
+#[test]
+fn solve_seed_with_kociemba_replays_and_prints_phases() {
+    let output = run(&["solve", "--seed", "42", "--solver", "kociemba"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).expect("utf8 stdout");
+    let parsed = parse_moves(stdout.trim()).expect("parse solution");
+    let mut cube = Cube::from_seed(42);
+    cube.apply_all(parsed.as_slice());
+    assert!(cube.is_solved());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("solver=kociemba"), "stderr: {stderr}");
+    assert!(stderr.contains("phases="), "stderr: {stderr}");
+    assert!(stderr.contains("total="), "stderr: {stderr}");
 }
 
 #[test]

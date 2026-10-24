@@ -9,7 +9,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use color_cube::{parse_moves, Cube};
-use color_cube_solver::{Limits, SolveError, Thistlethwaite};
+use color_cube_solver::{Kociemba, Limits, SolveError, Thistlethwaite};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
@@ -23,7 +23,7 @@ fn main() -> ExitCode {
         "check" => check(&args[2..]),
         "--help" | "-h" | "help" => {
             eprintln!(
-                "usage:\n  color-cube-cli solve --seed <u64> [--time-ms N] [--max-length N]\n  color-cube-cli solve --moves \"U R2 F'\"\n  color-cube-cli scramble --seed <u64> [--turns N]\n  color-cube-cli check --seed <u64>"
+                "usage:\n  color-cube-cli solve --seed <u64> [--solver thistlethwaite|kociemba] [--time-ms N] [--max-length N]\n  color-cube-cli solve --moves \"U R2 F'\" [--solver ...]\n  color-cube-cli scramble --seed <u64> [--turns N]\n  color-cube-cli check --seed <u64>"
             );
             Ok(())
         }
@@ -43,6 +43,7 @@ fn solve(args: &[String]) -> Result<(), String> {
     let mut moves = None;
     let mut time_ms = None;
     let mut max_length = None;
+    let mut solver_name = String::from("thistlethwaite");
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -57,6 +58,9 @@ fn solve(args: &[String]) -> Result<(), String> {
             }
             "--max-length" => {
                 max_length = Some(parse_next(args, &mut index)?);
+            }
+            "--solver" => {
+                solver_name = next_value(args, &mut index)?;
             }
             other => return Err(format!("unknown solve option: {other}")),
         }
@@ -75,17 +79,27 @@ fn solve(args: &[String]) -> Result<(), String> {
         cube
     };
 
-    let solver = Thistlethwaite::new();
-    let started = Instant::now();
     let limits = Limits {
         max_length,
         time_ms,
     };
-    match solver.solve_with_stats(&cube, limits) {
+    match solver_name.as_str() {
+        "thistlethwaite" => solve_thistlethwaite(&cube, limits),
+        "kociemba" => solve_kociemba(&cube, limits),
+        other => Err(format!(
+            "unknown solver: {other} (expected thistlethwaite or kociemba)"
+        )),
+    }
+}
+
+fn solve_thistlethwaite(cube: &Cube, limits: Limits) -> Result<(), String> {
+    let solver = Thistlethwaite::new();
+    let started = Instant::now();
+    match solver.solve_with_stats(cube, limits) {
         Ok((solution, phases, nodes)) => {
             println!("{}", format_moves(&solution.moves));
             eprintln!(
-                "phases={} {} {} {} nodes={} elapsed_ms={:.3}",
+                "solver=thistlethwaite phases={} {} {} {} nodes={} elapsed_ms={:.3}",
                 phases[0],
                 phases[1],
                 phases[2],
@@ -98,7 +112,46 @@ fn solve(args: &[String]) -> Result<(), String> {
         Err(SolveError::AlreadySolved) => {
             println!();
             eprintln!(
-                "phases=0 0 0 0 nodes=0 elapsed_ms={:.3}",
+                "solver=thistlethwaite phases=0 0 0 0 nodes=0 elapsed_ms={:.3}",
+                started.elapsed().as_secs_f64() * 1000.0
+            );
+            Ok(())
+        }
+        Err(SolveError::TablesMissing) => {
+            if let Some(error) = solver.load_error() {
+                Err(format!("solve failed: {error}"))
+            } else {
+                Err("solve failed: solver tables are missing or corrupt".into())
+            }
+        }
+        Err(error) => Err(format!("solve failed: {error}")),
+    }
+}
+
+fn solve_kociemba(cube: &Cube, limits: Limits) -> Result<(), String> {
+    let solver = Kociemba::new();
+    let started = Instant::now();
+    match solver.solve_with_stats(cube, limits) {
+        Ok((solution, stats)) => {
+            println!("{}", format_moves(&solution.moves));
+            let phases = solution.phases.unwrap_or([0, 0]);
+            eprintln!(
+                "solver=kociemba phases={} {} total={} phase1_nodes={} phase2_calls={} \
+                 phase2_nodes={} elapsed_ms={:.3}",
+                phases[0],
+                phases[1],
+                solution.moves.len(),
+                stats.phase1_nodes,
+                stats.phase2_calls,
+                stats.phase2_nodes,
+                started.elapsed().as_secs_f64() * 1000.0
+            );
+            Ok(())
+        }
+        Err(SolveError::AlreadySolved) => {
+            println!();
+            eprintln!(
+                "solver=kociemba phases=0 0 total=0 elapsed_ms={:.3}",
                 started.elapsed().as_secs_f64() * 1000.0
             );
             Ok(())

@@ -290,6 +290,20 @@ within its bound; only pruning strength and search time change.
 multi-hundred-megabyte cache. If search time ever becomes the bottleneck, the
 symmetry-reduced table can be added later behind a feature flag.
 
+## D025 — Add a third phase-1 pair table after the split heuristic missed the target
+
+**Context.** With `h = max(dist(twist,slice), dist(flip,slice))`, 1,000 uniform
+cubes took 473 ms median / 1.9 s max and 21.8B phase-1 nodes. `concept.md` §12
+targets <50 ms typical, so D024's two-table split is too weak in practice.
+**Decision.** Add `dist(twist, flip)` (2187 × 2048 = 4,478,976 bytes, ~4.5 MB)
+and use `h = max` of all three phase-1 tables. This is still ~30× smaller than
+the 138M-entry symmetry table and keeps the same solution lengths.
+**Consequence.** Kociemba's bundle grows to ~8.5 MB (total tables ~16.5 MB,
+native/CLI only). Measured after the change: median 245 ms, p95 496 ms, max
+854 ms, phase-1 nodes 8.1B — still above the 50 ms target. Accepted as a
+documented miss: §12 benchmarks are non-gating, and Kociemba is CLI-only (D004).
+
+
 
 
 

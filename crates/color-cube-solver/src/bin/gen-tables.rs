@@ -1,4 +1,5 @@
-//! Generates `cc-tables-v1.bin` and `cc-thistlethwaite-v1.bin`.
+//! Generates `cc-tables-v1.bin`, `cc-thistlethwaite-v1.bin` and
+//! `cc-kociemba-v1.bin`.
 //!
 //! Usage: `cargo run --release -p color-cube-solver --bin gen-tables [--verify]`.
 //! The output directory is `$COLOR_CUBE_TABLES`, or `./tables`.
@@ -6,6 +7,7 @@
 
 use std::process::ExitCode;
 
+use color_cube_solver::kociemba;
 use color_cube_solver::tables;
 use color_cube_solver::thistlethwaite;
 
@@ -52,6 +54,40 @@ fn main() -> ExitCode {
         report.phase4_ep_max
     );
 
+    let (kociemba_distances, kociemba_timings, kociemba_report) =
+        kociemba::generate_distance_tables(&moves);
+    let kociemba_sizes = kociemba_distances.payload_sizes();
+    let kociemba_names = [
+        "phase1_twist_slice",
+        "phase1_flip_slice",
+        "phase2_cp_sp",
+        "phase2_ep8_sp",
+        "phase1_twist_flip",
+    ];
+    for (slot, timing) in kociemba_timings.iter().enumerate() {
+        println!(
+            "  {:<20} {:>8.3} ms  {:>10} bytes",
+            kociemba_names[slot],
+            timing.elapsed.as_secs_f64() * 1000.0,
+            kociemba_sizes[slot]
+        );
+    }
+    println!("kociemba: {kociemba_report}");
+    println!(
+        "kociemba coverage full={} reached={} total={}",
+        kociemba_report.fully_covered(),
+        kociemba_report.phase1_twist_slice_reached
+            + kociemba_report.phase1_flip_slice_reached
+            + kociemba_report.phase2_cp_sp_reached
+            + kociemba_report.phase2_ep8_sp_reached
+            + kociemba_report.phase1_twist_flip_reached,
+        kociemba::PHASE1_TWIST_SLICE_ROWS
+            + kociemba::PHASE1_FLIP_SLICE_ROWS
+            + kociemba::PHASE2_CP_SP_ROWS
+            + kociemba::PHASE2_EP8_SP_ROWS
+            + kociemba::PHASE1_TWIST_FLIP_ROWS
+    );
+
     if verify {
         let (states, diameter) = thistlethwaite::verify_g3_diameter();
         println!("G3: reachable={states} diameter={diameter}");
@@ -75,12 +111,30 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     }
+    match kociemba_distances.write(&directory) {
+        Ok(path) => println!("wrote {}", path.display()),
+        Err(error) => {
+            eprintln!("failed to write kociemba distance tables: {error}");
+            return ExitCode::FAILURE;
+        }
+    }
 
     let move_total: usize = move_sizes.iter().sum();
     let distance_total: usize = distance_sizes.iter().sum();
+    let kociemba_total: usize = kociemba_sizes.iter().sum();
     println!(
-        "payloads: moves={move_total} bytes distances={distance_total} bytes total={} bytes",
-        move_total + distance_total
+        "payloads: moves={move_total} bytes distances={distance_total} bytes \
+         kociemba={kociemba_total} bytes total={} bytes",
+        move_total + distance_total + kociemba_total
     );
+    if let Some(peak) = peak_rss_kb() {
+        println!("peak_rss_kb={peak}");
+    }
     ExitCode::SUCCESS
+}
+
+fn peak_rss_kb() -> Option<u64> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let line = status.lines().find(|line| line.starts_with("VmHWM:"))?;
+    line.split_whitespace().nth(1)?.parse().ok()
 }
