@@ -1,0 +1,8 @@
+# Keep the build context small and stable.
+.git
+target
+tables
+web/pkg
+node_modules
+demos
+*.md
