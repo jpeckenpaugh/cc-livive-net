@@ -275,6 +275,22 @@ the worst case is still below interactive latency for a demo. Do not add the
 `time_ms` is only checked between phases. Revisit if the demo shows jank or if a
 strict worst-case bound is required later.
 
+## D024 — Kociemba phase 1 uses split heuristics, not the 139 MB table
+
+**Context.** `concept.md` §6 describes a full phase-1 pruning table of
+`2187 × 2048 × 495 = 2.2B` entries, symmetry-reduced to ~138M (~139 MB), and
+explicitly permits the split/heuristic approach when the budget is a problem.
+The browser ships Thistlethwaite (D004), so Kociemba is native/CLI-only.
+**Decision.** For M3, build two phase-1 heuristics — `(twist, slice)` and
+`(flip, slice)`, ~1.08M and ~1.01M bytes — and use `h = max(h1, h2)` in the
+phase-1 IDA*. Phase-2 tables stay `cp × sp` and `ep8 × sp` (967,680 each).
+Solution lengths are unaffected: each phase is still searched to optimality
+within its bound; only pruning strength and search time change.
+**Consequence.** Table generation stays seconds, not minutes, and CI needs no
+multi-hundred-megabyte cache. If search time ever becomes the bottleneck, the
+symmetry-reduced table can be added later behind a feature flag.
+
+
 
 
 
