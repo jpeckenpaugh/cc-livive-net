@@ -9,6 +9,10 @@ version = "0.1.0"
 [[package]]
 name = "color-cube-cli"
 version = "0.1.0"
+dependencies = [
+ "color-cube",
+ "color-cube-solver",
+]
 
 [[package]]
 name = "color-cube-solver"

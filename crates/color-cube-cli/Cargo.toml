@@ -10,3 +10,5 @@ description = "Scramble/solve/bench command line front end (M2+)"
 workspace = true
 
 [dependencies]
+color-cube = { path = "../color-cube" }
+color-cube-solver = { path = "../color-cube-solver" }

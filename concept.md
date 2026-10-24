@@ -489,10 +489,18 @@ Four phases, each solved by BFS over a small coordinate, then concatenated.
 
 | Phase | Goal subgroup | Generators after phase | Max moves | Coordinate(s) |
 |---|---|---|---|---|
-| 0→1 | `G1` | `L R F B U2 D2` | ≤7 | edge flip (2048) |
-| 1→2 | `G2` | `L R F2 B2 U2 D2` | ≤10 | corner twist (2187) |
-| 2→3 | `G3` | `L2 R2 F2 B2 U2 D2` | ≤13 | edge slice (495) + corner orbit |
-| 3→4 | solved | — | ≤15 | full solve within `G3` |
+| 0→1 | `G1` | `U D L R F2 B2` | ≤7 | edge flip (2048) |
+| 1→2 | `G2` | `U D L2 R2 F2 B2` | ≤10 | corner twist (2187) + slice (495) |
+| 2→3 | `G3` | `U2 D2 L2 R2 F2 B2` | ≤13 | corner tetrad + U/D-edge orbit quotient |
+| 3→4 | solved | — | ≤15 | corner and edge permutation (40320 each) |
+
+> **Amendment (2026-10-24, D019/D021).** The original table listed the subgroups
+> as `<L,R,F,B,U2,D2>`, `<L,R,F2,B2,U2,D2>`, `<L2,R2,F2,B2,U2,D2>`. Those are not
+> the Thistlethwaite groups: the first contains quarter-turn `F`, which flips
+> edges, so it cannot be the edge-oriented subgroup. The chain above is the
+> published one. Phase 1 targets edge orientation only (`G1` does not preserve
+> the E slice); phase 2 must target both corner twist and the slice, and its
+> coordinate is the pair. See D021 for the measured diameters.
 
 Implementation notes:
 

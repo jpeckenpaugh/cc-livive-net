@@ -198,4 +198,85 @@ Phase 2 and all table tests iterate only those moves.
 **Consequence.** Phase-2 search cannot silently read garbage; the sentinel is
 obvious in debuggers and tests. Tables stay a uniform shape.
 
+## D019 — Thistlethwaite uses the published group chain (corrects §9.1)
+
+**Context.** `concept.md` §9.1 listed `G1 = <L,R,F,B,U2,D2>`, which contains
+quarter-turn `F` and therefore is not the edge-oriented subgroup it claims to
+be. Also, reaching `G1` requires both edge orientation and the four E-slice
+edges in the E slice, so "edge flip" alone is not a sufficient phase-1
+coordinate.
+**Decision.** Use the published chain: `G1 = <U,D,L,R,F2,B2>`,
+`G2 = <U,D,L2,R2,F2,B2>`, `G3 = <U2,D2,L2,R2,F2,B2>`.
+- Phase 1: `(flip, slice)` pair table, 2048 × 495, all 18 moves, ≤7.
+- Phase 2: `twist` table, `G1` moves, ≤10.
+- Phase 3: quotient of `G2` by `G3` (corner tetrad pattern × U/D-edge orbit
+  pattern), `G2` moves, ≤13.
+- Phase 4: IDA* within `G3` using corner and edge permutation tables (40320
+  each), ≤15.
+Subgroup membership is asserted after every phase and every solution is
+replayed on a copy of the input cube.
+**Consequence.** `concept.md` §9.1 carries an amendment note. Total worst case
+stays ≤45 moves, tables stay small enough for WASM. The phase table in this
+entry is superseded by D021 (phase 1 is `flip` only); the group chain and the
+replay/assert rules stand.
+
+## D020 — Phase 4's edge coordinate includes the slice permutation
+
+**Context.** The phase-4 goal is the identity, not merely `ep8 == 0`. Within
+`G3` the four slice edges are freely permuted, so an edge coordinate of 40320
+(8!) would accept states with the slice edges out of place and let the solver
+return an unsolved cube.
+**Decision.** Use `ep_full = ep8_rank * 24 + sp_rank` (967,680 states), with
+transitions composed from the existing `move_ep8`/`move_sp` tables. Phase 4 is
+IDA* with `h = max(cp_dist, ep_full_dist)`.
+**Consequence.** One extra 1 MB distance table; replay verification would have
+caught the bug, but the contract now cannot express it.
+
+## D021 — Thistlethwaite phase split corrected again: flip, then (twist, slice)
+
+**Context.** D019 said phase 1 should target `(flip, slice)` and phase 2 `twist`.
+Measured diameters disproved the premise: quarter-turn `L`/`R` move U/D edges
+into the E slice, so `G1 = <U,D,L,R,F2,B2>` preserves edge orientation but not
+the slice. Including `slice` in phase 1 therefore targets a smaller subgroup
+(diameter 9), while `twist` alone in phase 2 does not reach `G2` because the
+slice may still be dirty.
+**Decision.** Phase 1 is `flip` only, all 18 moves, diameter 7. Phase 2 is the
+`(twist, slice)` pair, 2187 × 495 = 1,082,565 entries, `G1` moves, diameter 10.
+Phase 3 quotient, 4,900 states, diameter 9 (keep ≤13 as the contract bound).
+Phase 4 `G3`, 663,552 reachable states, diameter 15, IDA* with
+`cp`/`ep_full` heuristics. Worst-case sum 41, still ≤45.
+**Consequence.** `concept.md` §9.1 and this log's D019 phase table are corrected.
+The total table budget is essentially unchanged (+67 KB). G3's reachable size is
+663,552, not 3.98M.
+
+## D022 — Phase 3 uses the exact (cp, edge-orbit) coordinate, not the 4,900 pattern pair
+
+**Context.** D021 assumed the pair `(corner tetrad pattern, U/D edge orbit
+pattern)` was a congruence of `G2` by `G3` and would need only 4,900 rows.
+Measured transitions showed it is not: cp states 0 and 414 share a pattern but
+`U` sends them to different patterns, so a 4,900-row table can reach the goal
+pattern while the cube is not in `G3`. Phase 4 then failed on seeds 0, 3, 4, 42.
+**Decision.** Use `(cp_rank, ud_edge_orbit_pattern)` — `40320 * 70 = 2,822,400`
+rows — with a multi-source BFS whose goal set is the `G3` corner subgroup (96
+elements) plus the correct edge pattern. Measured diameter 13, exactly the
+contract bound. Keep the explicit `is_g3` assertion before phase 4.
+**Consequence.** The distance bundle grows by ~2.8 MB to 4.92 MB (total ~8.0 MB
+with move tables), still within the ≤10 MB budget. The "4,900 / max 9" numbers
+in D021 were wrong and should not be used.
+
+## D023 — Thistlethwaite performance is accepted as-is
+
+**Context.** 1,000 uniform cubes: median 0.118 ms, max 39.3 ms (seed 833, 7.18M
+phase-4 IDA* nodes). The concept's performance note says "<20 ms typical".
+**Decision.** Accept: the median is two orders of magnitude under the target, and
+the worst case is still below interactive latency for a demo. Do not add the
+663,552-byte full-`G3` distance table in v1.
+**Consequence.** Worst-case solve time is unbounded by wall clock inside phase 4;
+`time_ms` is only checked between phases. Revisit if the demo shows jank or if a
+strict worst-case bound is required later.
+
+
+
+
+
 

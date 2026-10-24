@@ -1,10 +1,16 @@
-//! Solver-support layer for `color-cube`: coordinates, move tables and the
-//! versioned table bundle.
+//! Coordinate and move-table support for `color-cube`, plus the deterministic
+//! Thistlethwaite solver (D019–D021).
 //!
-//! Search (Thistlethwaite, Kociemba) is not implemented yet; M2a ends at the
-//! coordinate and table boundary.
+//! M2b ends at the solver and CLI boundary; Kociemba and WASM integration are
+//! later milestones.
 
 #![forbid(unsafe_code)]
 
 pub mod coords;
 pub mod tables;
+pub mod thistlethwaite;
+
+pub use thistlethwaite::{
+    DistanceBundle, DistanceReport, DistanceTiming, Limits, Solution, SolveError, Solver,
+    TableLoadError, Thistlethwaite,
+};

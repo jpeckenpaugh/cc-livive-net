@@ -310,19 +310,47 @@ fn generate_sp() -> Vec<u8> {
 /// Encodes a bundle into the version-1 byte format.
 #[must_use]
 pub fn encode(bundle: &TableBundle) -> Vec<u8> {
-    let sizes = bundle.payload_sizes();
-    let payload_len: usize = sizes.iter().sum();
-    let mut out = Vec::with_capacity(HEADER_LEN + DIRECTORY_LEN + payload_len);
+    let payloads = vec![
+        u16_bytes(&bundle.move_twist),
+        u16_bytes(&bundle.move_flip),
+        u16_bytes(&bundle.move_slice),
+        u16_bytes(&bundle.move_cp),
+        u16_bytes(&bundle.move_ep8),
+        bundle.move_sp.clone(),
+    ];
+    encode_bundle(
+        MAGIC,
+        FORMAT_VERSION,
+        CONVENTIONS,
+        &table_entries(),
+        &payloads,
+    )
+}
 
-    out.extend_from_slice(&MAGIC);
-    out.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
-    out.extend_from_slice(&(6u32).to_le_bytes());
+/// Encodes a versioned bundle with an arbitrary table set.
+///
+/// `entries` are `(id, rows, cols, width)` in payload order. `payloads` must
+/// have one entry per directory entry and already be in the correct byte order.
+pub(crate) fn encode_bundle(
+    magic: [u8; 4],
+    version: u16,
+    conventions: &str,
+    entries: &[(u32, u32, u32, u8)],
+    payloads: &[Vec<u8>],
+) -> Vec<u8> {
+    assert_eq!(entries.len(), payloads.len(), "bundle entry count");
+    let payload_len: usize = payloads.iter().map(Vec::len).sum();
+    let mut out =
+        Vec::with_capacity(HEADER_LEN + entries.len() * DIRECTORY_ENTRY_LEN + payload_len);
+
+    out.extend_from_slice(&magic);
+    out.extend_from_slice(&version.to_le_bytes());
+    out.extend_from_slice(&(entries.len() as u32).to_le_bytes());
     out.extend_from_slice(&(payload_len as u64).to_le_bytes());
-    out.extend_from_slice(&fnv1a64(CONVENTIONS.as_bytes()).to_le_bytes());
+    out.extend_from_slice(&fnv1a64(conventions.as_bytes()).to_le_bytes());
     out.extend_from_slice(&0u64.to_le_bytes()); // checksum placeholder
 
-    let entries = table_entries();
-    for (id, rows, cols, width) in entries {
+    for &(id, rows, cols, width) in entries {
         out.extend_from_slice(&id.to_le_bytes());
         out.extend_from_slice(&rows.to_le_bytes());
         out.extend_from_slice(&cols.to_le_bytes());
@@ -330,12 +358,9 @@ pub fn encode(bundle: &TableBundle) -> Vec<u8> {
     }
 
     let payload_start = out.len();
-    push_u16(&mut out, &bundle.move_twist);
-    push_u16(&mut out, &bundle.move_flip);
-    push_u16(&mut out, &bundle.move_slice);
-    push_u16(&mut out, &bundle.move_cp);
-    push_u16(&mut out, &bundle.move_ep8);
-    out.extend_from_slice(&bundle.move_sp);
+    for payload in payloads {
+        out.extend_from_slice(payload);
+    }
     debug_assert_eq!(out.len() - payload_start, payload_len);
 
     let checksum = fnv1a64(&out[payload_start..]);
@@ -353,12 +378,30 @@ pub fn encode(bundle: &TableBundle) -> Vec<u8> {
 /// Returns the underlying I/O error if the directory cannot be created or the
 /// file cannot be written.
 pub fn write(directory: &Path, bundle: &TableBundle) -> io::Result<PathBuf> {
+    write_bundle_bytes(directory, BUNDLE_FILE, &encode(bundle))
+}
+
+/// Atomically writes raw bundle bytes into `directory` under `file_name`.
+pub(crate) fn write_bundle_bytes(
+    directory: &Path,
+    file_name: &str,
+    bytes: &[u8],
+) -> io::Result<PathBuf> {
     fs::create_dir_all(directory)?;
-    let target = directory.join(BUNDLE_FILE);
-    let temp = directory.join(format!(".{BUNDLE_FILE}.{}.tmp", std::process::id()));
-    fs::write(&temp, encode(bundle))?;
+    let target = directory.join(file_name);
+    let temp = directory.join(format!(".{file_name}.{}.tmp", std::process::id()));
+    fs::write(&temp, bytes)?;
     fs::rename(&temp, &target)?;
     Ok(target)
+}
+
+/// Loads raw bytes for a bundle from `directory`.
+pub(crate) fn read_bundle_bytes(directory: &Path, file_name: &str) -> Result<Vec<u8>, TablesError> {
+    match fs::read(directory.join(file_name)) {
+        Ok(data) => Ok(data),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Err(TablesError::Missing),
+        Err(_) => Err(TablesError::TableCorrupt),
+    }
 }
 
 /// Loads the bundle from `directory`.
@@ -368,12 +411,7 @@ pub fn write(directory: &Path, bundle: &TableBundle) -> io::Result<PathBuf> {
 /// [`TablesError::Missing`] when the file is absent, [`TablesError::TableCorrupt`]
 /// for any magic, version, hash, checksum or dimension failure.
 pub fn load(directory: &Path) -> Result<TableBundle, TablesError> {
-    let path = directory.join(BUNDLE_FILE);
-    let data = match fs::read(&path) {
-        Ok(data) => data,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Err(TablesError::Missing),
-        Err(_) => return Err(TablesError::TableCorrupt),
-    };
+    let data = read_bundle_bytes(directory, BUNDLE_FILE)?;
     decode(&data)
 }
 
@@ -383,92 +421,82 @@ pub fn load(directory: &Path) -> Result<TableBundle, TablesError> {
 ///
 /// [`TablesError::TableCorrupt`] on any structural or content mismatch.
 pub fn decode(data: &[u8]) -> Result<TableBundle, TablesError> {
-    if data.len() < HEADER_LEN + DIRECTORY_LEN {
+    let payloads = decode_bundle(data, MAGIC, FORMAT_VERSION, CONVENTIONS, &table_entries())?;
+    Ok(TableBundle {
+        move_twist: u16_table(&payloads[0]),
+        move_flip: u16_table(&payloads[1]),
+        move_slice: u16_table(&payloads[2]),
+        move_cp: u16_table(&payloads[3]),
+        move_ep8: u16_table(&payloads[4]),
+        move_sp: payloads[5].clone(),
+    })
+}
+
+/// Decodes a versioned bundle with an arbitrary table set.
+pub(crate) fn decode_bundle(
+    data: &[u8],
+    magic: [u8; 4],
+    version: u16,
+    conventions: &str,
+    expected: &[(u32, u32, u32, u8)],
+) -> Result<Vec<Vec<u8>>, TablesError> {
+    if data.len() < HEADER_LEN {
         return Err(TablesError::TableCorrupt);
     }
-    if data[..4] != MAGIC {
+    if data[..4] != magic {
         return Err(TablesError::TableCorrupt);
     }
-    let version = u16::from_le_bytes([data[4], data[5]]);
-    if version != FORMAT_VERSION {
+    if read_u16(data, 4) != version {
         return Err(TablesError::TableCorrupt);
     }
-    let count = u32::from_le_bytes([data[6], data[7], data[8], data[9]]);
-    if count != 6 {
+    let count = read_u32(data, 6) as usize;
+    if count != expected.len() {
         return Err(TablesError::TableCorrupt);
     }
-    let payload_len = read_u64(data, 10);
+    let payload_len = read_u64(data, 10) as usize;
     let param_hash = read_u64(data, 18);
     let checksum = read_u64(data, 26);
-    if param_hash != fnv1a64(CONVENTIONS.as_bytes()) {
+    if param_hash != fnv1a64(conventions.as_bytes()) {
         return Err(TablesError::TableCorrupt);
     }
 
-    let expected = [
-        (ID_TWIST, TWIST_ROWS, N_MOVES, 2u8),
-        (ID_FLIP, FLIP_ROWS, N_MOVES, 2),
-        (ID_SLICE, SLICE_ROWS, N_MOVES, 2),
-        (ID_CP, CP_ROWS, N_MOVES, 2),
-        (ID_EP8, EP8_ROWS, N_MOVES, 2),
-        (ID_SP, SP_ROWS, N_MOVES, 1),
-    ];
+    let directory_end = HEADER_LEN + count * DIRECTORY_ENTRY_LEN;
+    if data.len() < directory_end {
+        return Err(TablesError::TableCorrupt);
+    }
+    let mut sizes = Vec::with_capacity(count);
     let mut offset = HEADER_LEN;
-    let mut sizes = [0usize; 6];
-    for (slot, want) in expected.iter().enumerate() {
-        if offset + 13 > data.len() {
-            return Err(TablesError::TableCorrupt);
-        }
-        let id = u32::from_le_bytes([
-            data[offset],
-            data[offset + 1],
-            data[offset + 2],
-            data[offset + 3],
-        ]);
-        let rows = u32::from_le_bytes([
-            data[offset + 4],
-            data[offset + 5],
-            data[offset + 6],
-            data[offset + 7],
-        ]);
-        let cols = u32::from_le_bytes([
-            data[offset + 8],
-            data[offset + 9],
-            data[offset + 10],
-            data[offset + 11],
-        ]);
+    for &(want_id, want_rows, want_cols, want_width) in expected {
+        let id = read_u32(data, offset);
+        let rows = read_u32(data, offset + 4);
+        let cols = read_u32(data, offset + 8);
         let width = data[offset + 12];
-        if (id, rows as usize, cols as usize, width) != *want {
+        if (id, rows, cols, width) != (want_id, want_rows, want_cols, want_width) {
             return Err(TablesError::TableCorrupt);
         }
-        sizes[slot] = rows as usize * cols as usize * width as usize;
-        offset += 13;
+        sizes.push(rows as usize * cols as usize * width as usize);
+        offset += DIRECTORY_ENTRY_LEN;
     }
 
-    let payload_start = HEADER_LEN + DIRECTORY_LEN;
-    if data.len() != payload_start.saturating_add(payload_len as usize) {
+    let payload_start = directory_end;
+    if data.len() != payload_start.saturating_add(payload_len) {
         return Err(TablesError::TableCorrupt);
     }
     let payload = &data[payload_start..];
     if fnv1a64(payload) != checksum {
         return Err(TablesError::TableCorrupt);
     }
+    if sizes.iter().sum::<usize>() != payload.len() {
+        return Err(TablesError::TableCorrupt);
+    }
 
     let mut cursor = 0;
-    let move_twist = read_u16_table(payload, &mut cursor, sizes[0]);
-    let move_flip = read_u16_table(payload, &mut cursor, sizes[1]);
-    let move_slice = read_u16_table(payload, &mut cursor, sizes[2]);
-    let move_cp = read_u16_table(payload, &mut cursor, sizes[3]);
-    let move_ep8 = read_u16_table(payload, &mut cursor, sizes[4]);
-    let move_sp = payload[cursor..cursor + sizes[5]].to_vec();
-
-    Ok(TableBundle {
-        move_twist,
-        move_flip,
-        move_slice,
-        move_cp,
-        move_ep8,
-        move_sp,
-    })
+    let mut out = Vec::with_capacity(count);
+    for size in sizes {
+        out.push(payload[cursor..cursor + size].to_vec());
+        cursor += size;
+    }
+    Ok(out)
 }
 
 /// Resolves the bundle directory, honouring `COLOR_CUBE_TABLES` (a directory).
@@ -478,7 +506,7 @@ pub fn default_directory() -> PathBuf {
 }
 
 const HEADER_LEN: usize = 4 + 2 + 4 + 8 + 8 + 8;
-const DIRECTORY_LEN: usize = 6 * 13;
+const DIRECTORY_ENTRY_LEN: usize = 13;
 const CHECKSUM_OFFSET: usize = 26;
 
 fn table_entries() -> [(u32, u32, u32, u8); 6] {
@@ -492,18 +520,30 @@ fn table_entries() -> [(u32, u32, u32, u8); 6] {
     ]
 }
 
-fn push_u16(out: &mut Vec<u8>, values: &[u16]) {
+fn u16_bytes(values: &[u16]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(values.len() * 2);
     for &value in values {
         out.extend_from_slice(&value.to_le_bytes());
     }
+    out
 }
 
-fn read_u16_table(payload: &[u8], cursor: &mut usize, bytes: usize) -> Vec<u16> {
-    let end = *cursor + bytes;
-    let (pairs, _) = payload[*cursor..end].as_chunks::<2>();
-    let table = pairs.iter().map(|pair| u16::from_le_bytes(*pair)).collect();
-    *cursor = end;
-    table
+fn u16_table(payload: &[u8]) -> Vec<u16> {
+    let (pairs, _) = payload.as_chunks::<2>();
+    pairs.iter().map(|pair| u16::from_le_bytes(*pair)).collect()
+}
+
+fn read_u16(data: &[u8], offset: usize) -> u16 {
+    u16::from_le_bytes([data[offset], data[offset + 1]])
+}
+
+fn read_u32(data: &[u8], offset: usize) -> u32 {
+    u32::from_le_bytes([
+        data[offset],
+        data[offset + 1],
+        data[offset + 2],
+        data[offset + 3],
+    ])
 }
 
 fn read_u64(data: &[u8], offset: usize) -> u64 {
