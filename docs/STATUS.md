@@ -22,7 +22,8 @@ From `concept.md` §18, with evidence:
       deterministic — M3 gate (1,000 cubes, 16–22 moves, mean 19.86).
 - [x] `cc.livive.net` scrambles and solves in the browser without a JavaScript
       cube implementation — M4b browser gate (10 assertions); `web/app.js` holds
-      only facelets and calls the wasm exports.
+      only facelets and calls the wasm exports. **Live:** HTTP 200 on
+      `bbcc848`-era build, deployed `.wasm` SHA-256 matches the local build.
 - [x] Documentation, licensing, and benchmarks let an external user start —
       `README.md`, `docs/RL.md`, `docs/SOLVERS.md`, `LICENSE-MIT`,
       `LICENSE-APACHE`.
@@ -33,6 +34,7 @@ _(append-only, newest first)_
 
 | Date | Gate | Result |
 |---|---|---|
+| 2026-10-24 | CI + deploy | pass: rust, wasm, browser jobs green on `bbcc848`; Pages live, deployed wasm hash matches local |
 | 2026-10-24 | M5 check | pass: `check.sh` (35 Node assertions), `browser-smoke.sh` (10), `cargo doc` clean, bench n=100 |
 | 2026-10-24 | M4b browser | pass: 10 Playwright assertions, screenshot at artifacts/browser-pass.png |
 | 2026-10-24 | M4a check | pass: scripts/check.sh end-to-end, 35 Node assertions, wasm 7.71 MiB raw / 2.63 MiB gzip |
