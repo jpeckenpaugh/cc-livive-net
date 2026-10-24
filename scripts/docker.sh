@@ -21,6 +21,21 @@ CARGO_VOLUME=${CARGO_VOLUME:-cc-livive-cargo}
 TARGET_VOLUME=${TARGET_VOLUME:-cc-livive-target}
 DOCKER=${DOCKER:-docker}
 
+# Path remapping is part of the build contract, not an ad-hoc flag. It also
+# covers /alt so scripts/repro-check.sh can prove that the mount path does not
+# leak into the wasm. Setting it for every cargo/wasm-pack invocation keeps the
+# shared target volume from thrashing when check.sh and the wasm build alternate.
+DEFAULT_RUSTFLAGS="--remap-path-prefix=/work=/src --remap-path-prefix=/alt=/src"
+RUSTFLAGS=${RUSTFLAGS:-$DEFAULT_RUSTFLAGS}
+CARGO_INCREMENTAL=${CARGO_INCREMENTAL:-0}
+# Passed by the caller when it matters; HEAD's timestamp is the deterministic
+# fallback for dirty trees (which are never release evidence). rustc/wasm-opt
+# do not currently consume this; provenance records that fact.
+if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
+  SOURCE_DATE_EPOCH=$(git -C "$ROOT" log -1 --format=%ct 2>/dev/null || true)
+fi
+export RUSTFLAGS CARGO_INCREMENTAL SOURCE_DATE_EPOCH
+
 uid=$(id -u)
 gid=$(id -g)
 
@@ -50,11 +65,24 @@ run_container() {
   if [ -t 1 ]; then tty_flags+=(-t); fi
   ensure_volume "$CARGO_VOLUME"
   ensure_volume "$TARGET_VOLUME"
+  local docker_version dev_image_id docker_platform
+  docker_version=$("$DOCKER" version --format '{{.Server.Version}}' 2>/dev/null || true)
+  dev_image_id=$("$DOCKER" image inspect --format '{{.Id}}' "$IMAGE" 2>/dev/null || true)
+  docker_platform=$("$DOCKER" info --format '{{.OSType}}/{{.Architecture}}' 2>/dev/null || true)
   "$DOCKER" run --rm ${tty_flags[@]+"${tty_flags[@]}"} \
     --user "$uid:$gid" \
     -e HOME=/tmp \
     -e CARGO_HOME=/cargo \
     -e CARGO_TARGET_DIR=/work/target \
+    -e RUSTFLAGS \
+    -e CARGO_INCREMENTAL \
+    -e SOURCE_DATE_EPOCH \
+    -e "DOCKER_VERSION=$docker_version" \
+    -e "DEV_IMAGE_ID=$dev_image_id" \
+    -e "DOCKER_PLATFORM=$docker_platform" \
+    -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT -e GITHUB_REPOSITORY \
+    -e GITHUB_SERVER_URL -e GITHUB_SHA -e GITHUB_WORKFLOW -e GITHUB_REF_NAME \
+    -e CC_CHECK -e CC_NODE_ASSERTIONS -e CC_BROWSER_ASSERTIONS \
     -v "$ROOT:/work" \
     -v "$CARGO_VOLUME:/cargo" \
     -v "$TARGET_VOLUME:/work/target" \

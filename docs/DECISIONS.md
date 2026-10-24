@@ -355,6 +355,46 @@ positions and a sanity check against Kociemba, but it cannot verify hard
 positions yet. Closing M6 requires stronger disjoint/additive pattern databases
 or symmetry reduction, which is a separate project.
 
+## D030 — linux/amd64 CI is the canonical release platform
+
+**Context.** Wasm produced on arm64 (local `/work` and `/alt`) and amd64 (Pages
+CI) has been byte-identical, but cross-architecture determinism is a measured
+property, not a guarantee.
+**Decision.** Treat the linux/amd64 GitHub runner as canonical for release
+artifacts. Build natively on arm64 locally, and enforce equivalence with a
+`repro` CI job that builds twice at different paths and, where emulation is
+available, on both platforms.
+**Consequence.** No slow `--platform linux/amd64` requirement for local dev
+(D032). If a future toolchain breaks cross-arch equality, the repro job fails
+before deployment rather than silently changing the live artifact.
+
+## D031 — Provenance distinguishes inputs, build identity, and artifact identity
+
+**Context.** Docker images are not bit-reproducible (layer timestamps), while
+the wasm artifact has been shown to be. Conflating the two produces false
+claims.
+**Decision.** Publish `web/provenance.json` with three tiers:
+pinned inputs (base manifest digests, tool versions, `Cargo.lock` hash, commit
+tree), recorded build identity (dev image ID, layer chain, platform), and
+artifact identity (SHA-256 of wasm and JS; gzip advisory with `mtime=0`).
+`generated_at` and CI fields are metadata and never artifact identity. Missing
+values are `null`.
+**Consequence.** The site can show exactly what is reproducible and what is
+merely observed. Container digests are evidence, not a promise.
+
+## D032 — Local builds stay native; reproducibility is proven, not forced
+
+**Context.** Forcing `linux/amd64` on an arm64 laptop costs minutes of
+emulation per build.
+**Decision.** Local dev and `check.sh` build for the host platform. Pin paths
+via `--remap-path-prefix=/work=/src --remap-path-prefix=/alt=/src`, set
+`CARGO_INCREMENTAL=0`, and prove equivalence with `scripts/repro-check.sh`
+instead of slowing every build.
+**Consequence.** Fast local loops without weakening the release claim; a path
+outside `/work` or `/alt` is out of contract and must be remapped before it can
+be used as evidence.
+
+
 
 
 

@@ -49,7 +49,16 @@ section "wasm (nodejs)"
   --target nodejs --release --out-dir ../../web/pkg-node
 
 section "node smoke"
-./scripts/docker.sh node scripts/smoke.mjs
+if ! smoke_output=$(./scripts/docker.sh node scripts/smoke.mjs); then
+  printf '%s\n' "$smoke_output"
+  exit 1
+fi
+printf '%s\n' "$smoke_output"
+node_assertions=$(printf '%s\n' "$smoke_output" | sed -n 's/^PASS: \([0-9][0-9]*\) assertions.*/\1/p' | tail -1)
+
+section "provenance"
+CC_CHECK=pass CC_NODE_ASSERTIONS="$node_assertions" \
+  ./scripts/docker.sh node scripts/provenance.mjs
 
 echo
 echo "OK"

@@ -49,6 +49,8 @@ jobs:
           fi
       - name: Build wasm (web)
         run: ./scripts/docker.sh wasm-pack build crates/color-cube-wasm --target web --release --out-dir ../../web/pkg
+      - name: Provenance
+        run: ./scripts/docker.sh node scripts/provenance.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

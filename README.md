@@ -184,15 +184,27 @@ parameter hash, and checksum.
 |---|---|
 | `./scripts/docker.sh build` | Build the pinned Rust/Node/wasm-pack image |
 | `./scripts/gen-tables.sh` | Generate the three table bundles into `tables/` |
-| `./scripts/check.sh` | fmt, tables, clippy, `no_std`, tests, both wasm builds, Node smoke |
+| `./scripts/check.sh` | fmt, tables, clippy, `no_std`, tests, both wasm builds, Node smoke, provenance |
 | `./scripts/browser-smoke.sh` | Playwright browser test |
+| `./scripts/repro-check.sh` | Build twice at different paths and fail on a wasm/table hash mismatch |
+| `./scripts/repro-check.sh --platform linux/amd64` | Cross-arch check (best effort; prints `SKIP` without emulation) |
 | `./scripts/docker.sh cargo doc --no-deps` | Rust API docs |
 | `./scripts/docker.sh cargo run --release -p color-cube-cli -- bench` | Benchmarks |
 
-GitHub Actions runs the same Docker gates in three jobs: `rust`, `wasm`, and
-`browser` (`.github/workflows/ci.yml`); Pages deploys `web/` via
+GitHub Actions runs the same Docker gates in four jobs: `rust`, `wasm`,
+`repro`, and `browser` (`.github/workflows/ci.yml`); Pages deploys `web/` via
 `.github/workflows/pages.yml`. `scripts/check.sh` is the single local gate and
 is what "green" means (D002).
+
+### Provenance
+
+The pinned image and flags make the **wasm artifact** reproducible; the
+container image itself is not claimed reproducible. `scripts/check.sh` writes
+`web/provenance.json` (identity, tool versions, image pins, table hashes, and
+evidence), the demo shows it in a lazy-loaded panel, and
+`scripts/repro-check.sh` proves two clean builds at `/work` and `/alt` match.
+The exact claim, non-identity fields, and the pin-update checklist are in
+[`docs/PROVENANCE.md`](docs/PROVENANCE.md).
 
 ## Attribution and licence
 

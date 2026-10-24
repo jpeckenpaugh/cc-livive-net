@@ -114,6 +114,22 @@
         </div>
         <pre id="conformance" class="conformance" aria-live="polite">not run</pre>
       </section>
+
+      <section class="panel" aria-labelledby="provenance-heading">
+        <h2 id="provenance-heading">Provenance</h2>
+        <details id="provenance-details">
+          <summary>
+            Build evidence
+            <span id="provenance-state" class="provenance-state">click to load</span>
+          </summary>
+          <div id="provenance-body" hidden></div>
+          <p id="provenance-unavailable" class="hint" hidden>
+            Provenance was not generated for this build. The demo still works;
+            run the wasm build plus <code>scripts/provenance.mjs</code> to
+            produce it.
+          </p>
+        </details>
+      </section>
     </main>
 
     <footer>
@@ -124,5 +140,6 @@
     </footer>
 
     <script type="module" src="./app.js"></script>
+    <script type="module" src="./provenance.js"></script>
   </body>
 </html>

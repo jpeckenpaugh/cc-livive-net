@@ -3,6 +3,8 @@
 tables/
 web/pkg/
 web/pkg-node/
+web/provenance.json
+web/provenance.txt
 node_modules/
 demos/latest/
 .DS_Store

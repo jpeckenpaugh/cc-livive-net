@@ -12,6 +12,7 @@ Docker and was committed to `main`.
 | M4 | WASM wrapper, browser demo, Pages | Done | `feat(wasm)` | Isometric canvas, Playwright smoke, Pages workflow |
 | M5 | README, RL/solver docs, licenses, benchmarks | Done | `docs(m5)` | Bench, dual license, `cargo doc` clean |
 | M6 | Optional optimal oracle | Partial | `feat(optimal)` | Feature-gated IDA* + 3 PDBs; proves shallow distances, superflip not proved in 5 min |
+| A | Deterministic build, provenance, repro check | Review | — | Manifest-list pins, offline wasm-pack cache, `/work` vs `/alt` PASS, `provenance.json` panel; D030–D032 |
 
 ## v1 definition of done
 
@@ -34,6 +35,7 @@ _(append-only, newest first)_
 
 | Date | Gate | Result |
 |---|---|---|
+| 2026-10-24 | A provenance | pass: image pinned (index digests, amd64+arm64), offline wasm-pack cache proved with `--network none`, wasm `dd159465…`; `repro-check.sh --allow-dirty` PASS `/work` vs `/alt` on arm64 and amd64 (same hash); clean run pending commit |
 | 2026-10-24 | CI + deploy | pass: rust, wasm, browser jobs green on `bbcc848`; Pages live, deployed wasm hash matches local |
 | 2026-10-24 | M5 check | pass: `check.sh` (35 Node assertions), `browser-smoke.sh` (10), `cargo doc` clean, bench n=100 |
 | 2026-10-24 | M4b browser | pass: 10 Playwright assertions, screenshot at artifacts/browser-pass.png |
