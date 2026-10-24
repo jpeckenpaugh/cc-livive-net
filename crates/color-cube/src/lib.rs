@@ -3,8 +3,9 @@
 //! This crate is the `no_std`, zero-dependency core described in `concept.md`
 //! §4. It stores the cube at the cubie level (`cp`, `co`, `ep`, `eo`), converts
 //! losslessly to and from the 54 facelets of §3.2, and implements the 18 face
-//! turns of §3.5. It does not scramble, solve, allocate or format notation;
-//! those arrive in later milestones.
+//! turns of §3.5. It also provides seeded scrambles, Singmaster notation and
+//! the RL observation/mask surface, all without allocation. Solvers live in a
+//! separate crate.
 //!
 //! # Conventions
 //!
@@ -28,14 +29,30 @@
 //!
 //! The move transitions are derived from the facelet net at compile time; see
 //! the private `geometry` module for the method and the cross-check story.
+//!
+//! # Seeded construction and RL surface
+//!
+//! [`Cube::from_seed`] implements the frozen 36-draw uniform-state contract
+//! (D015). [`Cube::from_scramble`] is a pruned, non-uniform random walk for
+//! demos. [`Cube::write_observation`] emits the canonical 324-float one-hot
+//! (D006), and the two mask writers expose the action surface. When a
+//! canonical mask or the random walk prunes a move, the rule is D014: keep the
+//! higher face index of a commuting opposite pair.
 
 #![no_std]
 #![forbid(unsafe_code)]
 
 mod error;
 mod geometry;
+mod notation;
+mod rng;
+mod scramble;
 
 pub use error::CubeError;
+pub use notation::{
+    parse_moves, write_singmaster, FixedMoves, NotationError, ParseError, MAX_PARSED_MOVES,
+};
+pub use scramble::{Scramble, MAX_SCRAMBLE_LEN};
 
 /// Number of face turns: 3 powers for each of 6 faces.
 pub const N_MOVES: usize = 18;
@@ -45,6 +62,9 @@ pub const N_FACELETS: usize = 54;
 
 /// Number of sticker colours, one per face.
 pub const N_COLORS: usize = 6;
+
+/// Number of floats in the canonical observation, `facelet * 6 + color`.
+pub const N_OBSERVATIONS: usize = N_FACELETS * N_COLORS;
 
 /// A sticker colour.
 ///
@@ -171,6 +191,21 @@ impl Move {
         assert!(self.0 < N_MOVES as u8, "move index out of range");
         self.0 % 3 + 1
     }
+
+    /// The move's Singmaster name: `"U"`, `"U2"`, `"U'"`, and so on.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is not in `0..18` (D010).
+    #[must_use]
+    pub const fn to_singmaster(self) -> &'static str {
+        const NAMES: [&str; N_MOVES] = [
+            "U", "U2", "U'", "R", "R2", "R'", "F", "F2", "F'", "D", "D2", "D'", "L", "L2", "L'",
+            "B", "B2", "B'",
+        ];
+        assert!(self.0 < N_MOVES as u8, "move index out of range");
+        NAMES[self.0 as usize]
+    }
 }
 
 /// A legal-or-not cubie-level cube state.
@@ -291,6 +326,34 @@ impl Cube {
             return false;
         }
         parity(&self.cp) == parity(&self.ep)
+    }
+
+    /// Writes the canonical 324-float one-hot observation (D006).
+    ///
+    /// For facelet `f` with colour index `c`, index `f * 6 + c` is `1.0`; the
+    /// other five entries for that facelet are `0.0`. This overwrites every
+    /// slot of `out`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cubie entries are out of range, as [`Cube::facelets`] does.
+    pub fn write_observation(&self, out: &mut [f32; N_OBSERVATIONS]) {
+        for slot in out.iter_mut() {
+            *slot = 0.0;
+        }
+        for (facelet, color) in self.facelets().iter().enumerate() {
+            out[facelet * N_COLORS + color.index()] = 1.0;
+        }
+    }
+
+    /// Writes the default action mask: every one of the 18 moves is legal.
+    ///
+    /// This overwrites `out` with `1.0`. Canonical pruning is opt-in through
+    /// [`Cube::write_canonical_mask`].
+    pub fn write_action_mask(&self, out: &mut [f32; N_MOVES]) {
+        for slot in out.iter_mut() {
+            *slot = 1.0;
+        }
     }
 
     /// Writes the 54 facelet colours in `U R F D L B` order.

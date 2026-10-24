@@ -129,3 +129,46 @@ tests, still with zero dependencies (hand-written SplitMix64, reference tables
 inline).
 **Consequence.** Test ergonomics improve without weakening the `no_std` gate,
 which is enforced by `cargo build -p color-cube --no-default-features`.
+
+## D014 — Canonical move ordering prunes the lower face index
+
+**Context.** `concept.md` §8 gives "`D` after `U`" as an example of a pruned
+non-canonical pair, while §9 says "allow `D` only after `U`". The two sentences
+describe opposite pruning directions. Both are valid conventions, but only one
+can be implemented.
+**Decision.** Follow §9. Opposite faces commute; keep the move whose face index
+is higher (`U=0, R=1, F=2, D=3, L=4, B=5`), so `D` is allowed after `U`, `L`
+after `R`, `B` after `F`, and the reverse pairs are pruned. Same-face moves are
+always pruned. `last = None` prunes nothing.
+**Consequence.** The canonical action mask, the random walk, and later solver
+search all share one rule. §8's example is treated as the typo.
+
+## D015 — `from_seed` is a frozen 36-draw contract
+
+**Context.** Golden hashes and benchmark comparability require the sampling
+order to never change.
+**Decision.** One `SplitMix64` stream per seed, draws in this exact order:
+corner Fisher–Yates (7 draws, bounds 8..2), `co[0..7]` (7 draws, bound 3),
+edge Fisher–Yates (11 draws, bounds 12..2), `eo[0..11]` (11 draws, bound 2).
+`co[7]`/`eo[11]` are derived by sum. The parity fix swaps `ep[10]`/`ep[11]` with
+no draw. If the result is solved, restart the whole algorithm with
+`seed.wrapping_add(1)`, capped at 1024 attempts (then panic; unreachable).
+Bounded draws use modulo, so the distribution is uniform up to a per-draw
+deviation below `1/2^64`; this is documented rather than corrected, and no
+state-level rejection is used.
+**Consequence.** Changing the draw order or the PRNG invalidates every golden
+fixture and is a breaking change.
+
+## D016 — Notation and parser semantics
+
+**Context.** The core is `no_std` and allocation-free, but notation is
+text-shaped.
+**Decision.** `write_singmaster` is all-or-nothing: on a short buffer it
+returns `BufferTooSmall` and writes nothing. Tokens are separated by single
+spaces with no trailing space; an empty slice writes nothing and returns `Ok(0)`.
+`parse_moves` is uppercase-only, rejects unknown tokens, accepts empty or
+whitespace-only input as an empty list, and caps at 64 moves
+(`TooManyMoves`). Malformed tokens are never skipped.
+**Consequence.** Round-tripping is lossless and testable without `alloc`; a
+friendlier lowercase-tolerant parser can live in the CLI.
+
