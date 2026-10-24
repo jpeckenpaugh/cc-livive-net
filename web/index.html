@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cc.livive.net — colour cube</title>
+    <meta
+      name="description"
+      content="A stateless 3×3×3 colour-cube demo running the Rust core and Thistlethwaite solver as WebAssembly."
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div>
+        <h1>colour cube</h1>
+        <p class="subtitle">
+          Rust core + Thistlethwaite in WebAssembly · ≤45 moves · no second JS engine
+        </p>
+      </div>
+      <label class="toggle">
+        <input id="cb-toggle" type="checkbox" />
+        <span>colour-blind palette</span>
+      </label>
+    </header>
+
+    <main>
+      <section class="panel cube-panel" aria-labelledby="cube-heading">
+        <h2 id="cube-heading" class="sr-only">Cube</h2>
+        <div id="net" class="net" role="img" aria-label="Unfolded cube net"></div>
+        <p id="status" class="status" aria-live="polite">loading wasm…</p>
+      </section>
+
+      <section class="panel controls" aria-labelledby="controls-heading">
+        <h2 id="controls-heading">Controls</h2>
+        <div class="button-row">
+          <button id="scramble" type="button">Scramble</button>
+          <button id="solve" type="button">Solve</button>
+          <button id="play" type="button" disabled>Play solution</button>
+          <button id="reset" type="button">Reset</button>
+        </div>
+
+        <div id="moves" class="move-grid" aria-label="Face turns"></div>
+
+        <div class="readout">
+          <span>moves applied <strong id="move-count">0</strong></span>
+          <span>solution <strong id="solution-length">—</strong></span>
+          <span>solver <strong id="solver-time">—</strong></span>
+        </div>
+
+        <label class="sequence">
+          <span>Move sequence</span>
+          <input
+            id="sequence"
+            type="text"
+            inputmode="text"
+            spellcheck="false"
+            placeholder="U R2 F'"
+            autocomplete="off"
+          />
+        </label>
+        <div class="button-row">
+          <button id="apply-sequence" type="button">Apply sequence</button>
+          <button id="copy-solution" type="button">Copy solution</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="inspector-heading">
+        <h2 id="inspector-heading">Inspector</h2>
+        <dl class="inspector">
+          <dt>facelets</dt>
+          <dd id="facelet-count">—</dd>
+          <dt>observation</dt>
+          <dd id="observation-shape">—</dd>
+          <dt>one-hot ones</dt>
+          <dd id="observation-ones">—</dd>
+          <dt>legal moves</dt>
+          <dd id="legal-moves">—</dd>
+        </dl>
+        <p class="hint">
+          Keyboard: <kbd>U</kbd> <kbd>R</kbd> <kbd>F</kbd> <kbd>D</kbd>
+          <kbd>L</kbd> <kbd>B</kbd> for a quarter turn, hold
+          <kbd>Shift</kbd> for counter-clockwise.
+        </p>
+      </section>
+
+      <section class="panel" aria-labelledby="conformance-heading">
+        <h2 id="conformance-heading">Conformance</h2>
+        <p class="hint">
+          32 seeds, core invariants, and solve/replay. This is a browser smoke
+          suite, not the full Rust test suite.
+        </p>
+        <div class="button-row">
+          <button id="run-conformance" type="button">Run conformance</button>
+        </div>
+        <pre id="conformance" class="conformance" aria-live="polite">not run</pre>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Thistlethwaite only in the browser (D004). Kociemba stays in the native
+        CLI. Tables are embedded in the wasm at build time.
+      </p>
+    </footer>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

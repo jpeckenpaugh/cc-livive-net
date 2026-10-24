@@ -1,0 +1,65 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          tags: cc-livive-dev:latest
+          cache-from: type=gha,scope=cc-dev
+          cache-to: type=gha,mode=max,scope=cc-dev
+      - name: Prepare cache volumes
+        run: |
+          docker volume create cc-livive-cargo
+          docker volume create cc-livive-target
+          docker run --rm -u 0 \
+            -v cc-livive-cargo:/cargo \
+            -v cc-livive-target:/work/target \
+            cc-livive-dev:latest chown -R "$(id -u):$(id -g)" /cargo /work/target
+      - name: Cache tables
+        uses: actions/cache@v4
+        with:
+          path: tables
+          key: tables-v1-${{ hashFiles('crates/color-cube-solver/src/**', 'crates/color-cube/src/**', 'Cargo.lock') }}
+      - name: Generate tables if missing
+        run: |
+          if [ ! -f tables/cc-tables-v1.bin ] || [ ! -f tables/cc-thistlethwaite-v1.bin ]; then
+            ./scripts/gen-tables.sh
+          fi
+      - name: Build wasm (web)
+        run: ./scripts/docker.sh wasm-pack build crates/color-cube-wasm --target web --release --out-dir ../../web/pkg
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

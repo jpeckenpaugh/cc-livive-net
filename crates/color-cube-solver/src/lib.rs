@@ -12,6 +12,8 @@ pub mod solver;
 pub mod tables;
 pub mod thistlethwaite;
 
+mod clock;
+
 pub use kociemba::{
     Kociemba, KociembaDistanceBundle, KociembaDistanceReport, KociembaDistanceTiming,
     KociembaOptions, KociembaStats,

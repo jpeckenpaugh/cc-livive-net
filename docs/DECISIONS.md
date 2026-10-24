@@ -30,6 +30,7 @@ after is fast. CI can reuse the same Dockerfile.
 **Decision.** Keep the base image lean (rust + node + wasm-pack). Add the
 browser layer when M4 starts.
 **Consequence.** M0–M3 images stay small; M4 rebuild is a one-time cost.
+**Superseded by D026:** no browser layer is needed in v1.
 
 ## D004 — Browser ships Thistlethwaite by default
 
@@ -302,6 +303,42 @@ the 138M-entry symmetry table and keeps the same solution lengths.
 native/CLI only). Measured after the change: median 245 ms, p95 496 ms, max
 854 ms, phase-1 nodes 8.1B — still above the 50 ms target. Accepted as a
 documented miss: §12 benchmarks are non-gating, and Kociemba is CLI-only (D004).
+
+## D026 — WASM smoke is Node, not a browser
+
+**Context.** `concept.md` §13 allows either Playwright or a Node `wasm-bindgen`
+smoke. Chromium is a large image layer and D005 already cuts the showcase
+recording.
+**Decision.** Build the crate twice (`--target web` for the site, `--target
+nodejs` for tests) and run `scripts/smoke.mjs` via `createRequire`. No
+Playwright, no root `package.json`, `.mjs` only.
+**Consequence.** Fast CI, small image. A real browser test can be added at M4b
+if the UI needs one; the DOM is plain JS and stateless.
+
+## D027 — Tables are embedded in the wasm; budget is transferred size
+
+**Context.** The browser needs the move bundle (3.07 MB) and Thistlethwaite
+distances (4.92 MB) at startup.
+**Decision.** `include_bytes!` both bundles, generated before compilation by
+`gen-tables`, with a `build.rs` that fails with "run ./scripts/gen-tables.sh"
+when they are absent. Accept ~8.5 MB raw wasm / ~2.7 MB gzipped; no runtime
+fetch and no binaryen requirement in v1. Kociemba tables never enter the wasm.
+**Consequence.** Build order is part of the contract: fmt → generate → clippy →
+build. CI caches the table bundle by generator source hash.
+
+## D028 — WASM-facing API conventions
+
+**Context.** `wasm32-unknown-unknown` does not reliably implement
+`std::time::Instant`, and JS numbers do not carry `u64`.
+**Decision.** Put a `cfg(target_arch = "wasm32")` clock shim in the solver
+(native unchanged; wasm treats time limits as disabled and never calls
+`Instant::now`). Measure `elapsed_ms` in the wasm crate with `js_sys::Date::now`.
+`scramble` takes `u32` and zero-extends to `u64`. Fallible exports return
+`Result<T, JsValue>`; an already-solved cube yields an empty successful report,
+not an error.
+**Consequence.** No panic crosses the boundary, and the JS API stays
+BigInt-free. The `u32` seed space is a documented stable subset.
+
 
 
 

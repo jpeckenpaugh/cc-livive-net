@@ -2,6 +2,7 @@
 **/target
 tables/
 web/pkg/
+web/pkg-node/
 node_modules/
 demos/latest/
 .DS_Store

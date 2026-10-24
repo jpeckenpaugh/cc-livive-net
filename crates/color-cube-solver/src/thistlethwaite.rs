@@ -22,6 +22,7 @@ use std::time::{Duration, Instant};
 
 use color_cube::{Cube, Move, N_MOVES};
 
+use crate::clock;
 use crate::coords::{self, N_CP, N_EP8, N_SP, SLICE_SOLVED};
 use crate::tables::{self, TableBundle, TablesError};
 
@@ -258,6 +259,37 @@ impl Thistlethwaite {
         }
     }
 
+    /// Creates a solver from already-decoded bundles.
+    ///
+    /// This is the path used when the tables are embedded in a WASM module
+    /// (D027): no filesystem access and no lazy load.
+    #[must_use]
+    pub fn from_bundles(moves: TableBundle, distances: DistanceBundle) -> Self {
+        let loaded = OnceLock::new();
+        let _ = loaded.set(Ok(Arc::new(LoadedTables { moves, distances })));
+        Self {
+            directory: PathBuf::new(),
+            loaded,
+        }
+    }
+
+    /// Decodes both bundles from in-memory bytes and creates a solver.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`TableLoadError`] naming the bundle that failed to decode.
+    pub fn from_encoded(move_bytes: &[u8], distance_bytes: &[u8]) -> Result<Self, TableLoadError> {
+        let moves = tables::decode(move_bytes).map_err(|error| TableLoadError {
+            bundle: tables::BUNDLE_FILE,
+            error,
+        })?;
+        let distances = DistanceBundle::decode(distance_bytes).map_err(|error| TableLoadError {
+            bundle: THISTLE_BUNDLE_FILE,
+            error,
+        })?;
+        Ok(Self::from_bundles(moves, distances))
+    }
+
     /// Generates both bundles into `directory`, then creates a solver.
     ///
     /// # Errors
@@ -324,7 +356,7 @@ impl Thistlethwaite {
             return Err(SolveError::AlreadySolved);
         }
         let loaded = self.loaded().map_err(|_| SolveError::TablesMissing)?;
-        let started = Instant::now();
+        let started = clock::now();
         check_time(limits, started)?;
 
         let mut current = *cube;
@@ -415,9 +447,12 @@ impl Solver for Thistlethwaite {
     }
 }
 
-fn check_time(limits: Limits, started: Instant) -> Result<(), SolveError> {
+fn check_time(limits: Limits, started: clock::Instant) -> Result<(), SolveError> {
+    if !clock::TIME_LIMITS_ENABLED {
+        return Ok(());
+    }
     if let Some(time_ms) = limits.time_ms {
-        if started.elapsed().as_millis() >= u128::from(time_ms) {
+        if clock::elapsed_ms(started) >= u128::from(time_ms) {
             return Err(SolveError::Timeout);
         }
     }
