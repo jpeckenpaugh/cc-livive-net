@@ -10,3 +10,4 @@ description = "Coords, move tables, Thistlethwaite and Kociemba solvers (M2+)"
 workspace = true
 
 [dependencies]
+color-cube = { path = "../color-cube" }

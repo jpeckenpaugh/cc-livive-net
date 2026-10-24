@@ -42,12 +42,14 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+mod coords;
 mod error;
 mod geometry;
 mod notation;
 mod rng;
 mod scramble;
 
+pub use coords::{N_FLIP, N_SLICE, N_TWIST, SLICE_SOLVED};
 pub use error::CubeError;
 pub use notation::{
     parse_moves, write_singmaster, FixedMoves, NotationError, ParseError, MAX_PARSED_MOVES,

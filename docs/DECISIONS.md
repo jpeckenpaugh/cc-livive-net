@@ -172,3 +172,30 @@ whitespace-only input as an empty list, and caps at 64 moves
 **Consequence.** Round-tripping is lossless and testable without `alloc`; a
 friendlier lowercase-tolerant parser can live in the CLI.
 
+## D017 — Coordinate encodings and setter validity
+
+**Context.** The solver needs to realise a cube from arbitrary coordinate
+values, including coordinate pairs that are individually legal but jointly
+parity-inconsistent.
+**Decision.** `twist` is the seven-term base-3 encoding (`co[7]` implied),
+`flip` the eleven-term base-2 encoding, `slice` the combinadic
+`C(p0,1)+C(p1,2)+C(p2,3)+C(p3,4)` with `SLICE_SOLVED = 494`, `cp`/`ep8` Lehmer
+ranks, `sp` the 24 orderings of the middle edges. Core setters are raw
+(`set_slice_combination` may break parity); solver setters are total and repair
+parity by swapping within a set that preserves the coordinate just written.
+`set_cp_ep8` exists so both permutation coordinates can be realised together.
+**Consequence.** "Valid cube" is a property of the solver setter, not the core
+raw setter. Tests assert that distinction rather than papering over it.
+
+## D018 — `ep8`/`sp` tables are defined only inside `G1`
+
+**Context.** `ep8` (eight U/D edges in positions 0..7) and `sp` (four middle
+edges in 8..11) are undefined the moment a middle-slice edge leaves the slice,
+which any quarter turn of `R`, `L`, `F`, `B` does.
+**Decision.** Keep the spec's `x 18` table shape, fill non-`G1` columns with
+`u16::MAX`/`u8::MAX`, and export `PHASE2_MOVES` (indices `0,1,2,9,10,11,4,7,13,16`).
+Phase 2 and all table tests iterate only those moves.
+**Consequence.** Phase-2 search cannot silently read garbage; the sentinel is
+obvious in debuggers and tests. Tables stay a uniform shape.
+
+

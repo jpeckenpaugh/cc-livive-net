@@ -13,6 +13,9 @@ version = "0.1.0"
 [[package]]
 name = "color-cube-solver"
 version = "0.1.0"
+dependencies = [
+ "color-cube",
+]
 
 [[package]]
 name = "color-cube-wasm"
