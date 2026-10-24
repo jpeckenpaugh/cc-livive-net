@@ -28,11 +28,13 @@ const NODE_BASE = "node:24.22.1-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e4
 
 function run(command, args) {
   try {
+    // Empty output is a success, not a failure: `git status --porcelain` on a
+    // clean tree is empty, and returning null there made `dirty` unknown.
     return execFileSync(command, args, {
       encoding: "utf8",
       cwd: ROOT,
       stdio: ["ignore", "pipe", "ignore"],
-    }).trim() || null;
+    }).trim();
   } catch {
     return null;
   }
