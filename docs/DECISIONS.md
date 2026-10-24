@@ -93,3 +93,39 @@ construct `Move(200)`.
 `< 18` and panic otherwise. No masking, no silent no-op.
 **Consequence.** Internal code only ever builds moves via `ALL`/`from_index`.
 A total API can be added later as `try_apply` if a caller needs it.
+
+## D011 — Corner orientation is the index within the position's facelet triple
+
+**Context.** `concept.md` §3.4 describes corner orientation by which face the
+`U`/`D` sticker sits on (`0` = U/D, `1` = R/L, `2` = F/B). That prose contradicts
+the facelet triples in §3.3 for the four positions ordered `(U/D, F/B, R/L)` —
+`UFL`, `UBR`, `DLF`, `DBL`. Read literally it gives `sum(co) = 8 ≡ 2 (mod 3)`
+for a legal `R` turn, so no correct cube implementation can use it as written.
+The implementer caught this during M0.
+**Decision.** Use the index of the piece's `U`/`D` sticker within the position's
+§3.3 triple (`0/1/2`). For edges, use the index of the reference sticker
+(`U`/`D` for U/D edges, `F`/`B` for middle edges) within the pair. This
+reproduces Kociemba's published `co`/`eo` deltas exactly, which is the authority
+the solvers depend on. `concept.md` §3.4 carries an amendment note pointing
+here.
+**Consequence.** Golden fixtures and any future table generator must use this
+definition. The visual "which face is the sticker on" description remains
+useful only for `URF`, `DFR`, `DRB`, `ULB`.
+
+## D012 — `Cargo.lock` is committed
+
+**Context.** A workspace with pinned path members and (later) solver
+dependencies must build reproducibly in CI and Docker.
+**Decision.** Commit the root `Cargo.lock`. Binary and workspace builds pin it;
+the core crate itself still has no external dependencies.
+**Consequence.** Dependency bumps are explicit commits.
+
+## D013 — Integration tests may use `std`; the library may not
+
+**Context.** D008 bans dependencies in the core; `no_std` is a property of the
+library, not of its test harness.
+**Decision.** `crates/color-cube/tests/*.rs` are ordinary `std` integration
+tests, still with zero dependencies (hand-written SplitMix64, reference tables
+inline).
+**Consequence.** Test ergonomics improve without weakening the `no_std` gate,
+which is enforced by `cargo build -p color-cube --no-default-features`.

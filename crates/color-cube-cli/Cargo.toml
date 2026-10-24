@@ -1,0 +1,12 @@
+[package]
+name = "color-cube-cli"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Scramble/solve/bench command line front end (M2+)"
+
+[lints]
+workspace = true
+
+[dependencies]

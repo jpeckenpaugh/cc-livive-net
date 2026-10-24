@@ -40,11 +40,14 @@ build() {
 }
 
 run_container() {
+  # macOS ships bash 3.2; expanding an empty array under `set -u` is an error
+  # there, so use the guarded form.
   local tty_flags=()
-  if [ -t 0 ] && [ -t 1 ]; then tty_flags=(-it); fi
+  if [ -t 0 ]; then tty_flags+=(-i); fi
+  if [ -t 1 ]; then tty_flags+=(-t); fi
   ensure_volume "$CARGO_VOLUME"
   ensure_volume "$TARGET_VOLUME"
-  "$DOCKER" run --rm "${tty_flags[@]}" \
+  "$DOCKER" run --rm ${tty_flags[@]+"${tty_flags[@]}"} \
     --user "$uid:$gid" \
     -e HOME=/tmp \
     -e CARGO_HOME=/cargo \
@@ -57,7 +60,9 @@ run_container() {
 }
 
 check() {
-  run_container bash -lc '
+  # `bash -c`, not `bash -lc`: a login shell re-sources /etc/profile and drops
+  # the image's rustup PATH.
+  run_container bash -c '
     set -euo pipefail
     echo "== fmt =="
     cargo fmt --all -- --check

@@ -1,0 +1,12 @@
+[package]
+name = "color-cube-wasm"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "wasm-bindgen wrapper for the browser demo (M4+)"
+
+[lints]
+workspace = true
+
+[dependencies]

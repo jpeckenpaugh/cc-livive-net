@@ -1,0 +1,20 @@
+[workspace]
+members = [
+    "crates/color-cube",
+    "crates/color-cube-solver",
+    "crates/color-cube-cli",
+    "crates/color-cube-wasm",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/jpeckenpaugh/cc-livive-net"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

@@ -178,6 +178,15 @@ edges). This drives orientation.
   - `1` — it is on the `R` or `L` facelet;
   - `2` — it is on the `F` or `B` facelet.
 
+  > **Amendment (2026-10-24, D011).** The prose above is not consistent with the
+  > facelet triples in §3.3 and violates `sum(co) ≡ 0 (mod 3)` for a legal `R`
+  > turn. The definition actually used, and the one Kociemba's tables assume, is
+  > the **index of the piece's `U`/`D` sticker within the position's §3.3
+  > triple**: `0` for the first facelet of the triple, `1` for the second, `2`
+  > for the third. For `URF`, `DFR`, `DRB`, `ULB` this coincides with the
+  > axis-based prose; for `UFL`, `UBR`, `DLF`, `DBL` it does not, because those
+  > triples are ordered `(U/D, F/B, R/L)`.
+
   Sum of `co` over all 8 corners ≡ `0 (mod 3)`.
 
 - **Edge orientation (`eo`)**:
