@@ -1,0 +1,215 @@
+[
+  {
+    "id": "cube",
+    "name": "Cube",
+    "kind": "core",
+    "rust": "#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]\npub struct Cube {\n    /// Piece index at each corner position.\n    pub cp: [u8; 8],\n    /// Twist of the piece at each corner position, `0..3`.\n    pub co: [u8; 8],\n    /// Piece index at each edge position.\n    pub ep: [u8; 12],\n    /// Flip of the piece at each edge position, `0..2`.\n    pub eo: [u8; 12],\n}",
+    "fields": [
+      { "name": "cp", "type": "[u8; 8]", "meaning": "Piece index at each corner position, `0..8`." },
+      { "name": "co", "type": "[u8; 8]", "meaning": "Corner orientation, `0..3`; the `U`/`D` sticker's index in the position triple (D011)." },
+      { "name": "ep", "type": "[u8; 12]", "meaning": "Piece index at each edge position, `0..12`." },
+      { "name": "eo", "type": "[u8; 12]", "meaning": "Edge orientation, `0..2`; the reference sticker's index in the position pair (D011)." }
+    ],
+    "invariants": [
+      "The 54 facelets are a projection of this state, not a second source of truth.",
+      "A legal cube has `sum(co) % 3 == 0`, `sum(eo) % 2 == 0`, and matching corner/edge permutation parity.",
+      "`Copy`, `no_std`, and counter-free: move counts live in callers (D007)."
+    ],
+    "bytes": 40,
+    "source": { "file": "crates/color-cube/src/lib.rs", "symbol": "Cube" }
+  },
+  {
+    "id": "move",
+    "name": "Move",
+    "kind": "core",
+    "rust": "#[repr(transparent)]\n#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]\npub struct Move(pub u8);",
+    "fields": [
+      { "name": "0", "type": "u8", "meaning": "Action index `0..18`: three powers for each face in `U R F D L B` order." }
+    ],
+    "invariants": [
+      "Values `>= 18` are not moves; checked construction is `Move::from_index` (D010).",
+      "`repr(transparent)` keeps it a plain byte at the wasm boundary."
+    ],
+    "bytes": 1,
+    "source": { "file": "crates/color-cube/src/lib.rs", "symbol": "Move" }
+  },
+  {
+    "id": "color",
+    "name": "Color",
+    "kind": "core",
+    "rust": "#[repr(u8)]\n#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]\npub enum Color {\n    /// Up: white.\n    U = 0,\n    /// Down: yellow.\n    D = 1,\n    /// Front: green.\n    F = 2,\n    /// Back: blue.\n    B = 3,\n    /// Right: red.\n    R = 4,\n    /// Left: orange.\n    L = 5,\n}",
+    "fields": [
+      { "name": "U", "type": "= 0", "meaning": "Up / white." },
+      { "name": "D", "type": "= 1", "meaning": "Down / yellow." },
+      { "name": "F", "type": "= 2", "meaning": "Front / green." },
+      { "name": "B", "type": "= 3", "meaning": "Back / blue." },
+      { "name": "R", "type": "= 4", "meaning": "Right / red." },
+      { "name": "L", "type": "= 5", "meaning": "Left / orange." }
+    ],
+    "invariants": [
+      "Discriminants follow colour order `U D F B R L`, not face order (D009).",
+      "Face index and colour index are converted through tables, never `as u8` arithmetic."
+    ],
+    "bytes": 1,
+    "source": { "file": "crates/color-cube/src/lib.rs", "symbol": "Color" }
+  },
+  {
+    "id": "scramble",
+    "name": "Scramble",
+    "kind": "core",
+    "rust": "#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]\npub struct Scramble {\n    /// The moves of the walk, in application order.\n    pub moves: [Move; MAX_SCRAMBLE_LEN],\n    /// Number of live entries in `moves`.\n    pub len: u8,\n}",
+    "fields": [
+      { "name": "moves", "type": "[Move; 32]", "meaning": "Fixed-capacity move buffer; only the first `len` entries are live." },
+      { "name": "len", "type": "u8", "meaning": "Number of live moves, at most `MAX_SCRAMBLE_LEN` (32)." }
+    ],
+    "invariants": [
+      "`len` is clamped defensively by `as_slice`, so a bad `len` cannot read past the buffer.",
+      "This is the demo random walk, not the uniform `from_seed` constructor (D015)."
+    ],
+    "bytes": 33,
+    "source": { "file": "crates/color-cube/src/scramble.rs", "symbol": "Scramble" }
+  },
+  {
+    "id": "cube-error",
+    "name": "CubeError",
+    "kind": "core",
+    "rust": "#[derive(Clone, Copy, Debug, PartialEq, Eq)]\n#[non_exhaustive]\npub enum CubeError {\n    /// The 54 facelets do not contain exactly nine stickers of each colour.\n    MalformedFacelets,\n    /// The six centre stickers are not the fixed solved centres.\n    InvalidCenter,\n    /// A corner or edge piece is missing, unrecognisable, or duplicated.\n    InvalidPermutation,\n    /// The corner twist sum is not divisible by three.\n    Twist,\n    /// The edge flip sum is not even.\n    Flip,\n    /// Corner and edge permutation parities differ.\n    Parity,\n}",
+    "fields": [
+      { "name": "MalformedFacelets", "type": "unit", "meaning": "The 54 facelets do not contain nine stickers of each colour." },
+      { "name": "InvalidCenter", "type": "unit", "meaning": "The six centres do not match the fixed colour scheme." },
+      { "name": "InvalidPermutation", "type": "unit", "meaning": "A corner or edge piece is missing, unrecognisable, or duplicated." },
+      { "name": "Twist", "type": "unit", "meaning": "The corner twist sum is not divisible by three." },
+      { "name": "Flip", "type": "unit", "meaning": "The edge flip sum is not even." },
+      { "name": "Parity", "type": "unit", "meaning": "Corner and edge permutation parities differ." }
+    ],
+    "invariants": [
+      "Variants are checked in declaration order by `Cube::from_facelets`.",
+      "`#[non_exhaustive]` keeps new variants a non-breaking change."
+    ],
+    "bytes": null,
+    "source": { "file": "crates/color-cube/src/error.rs", "symbol": "CubeError" }
+  },
+  {
+    "id": "solution",
+    "name": "Solution",
+    "kind": "solver",
+    "rust": "/// A solver result.\n#[derive(Clone, Debug, PartialEq, Eq)]\npub struct Solution {\n    /// The moves in application order.\n    pub moves: Vec<Move>,\n    /// Whether the solver claims optimality. Both v1 solvers always return\n    /// `false`.\n    pub optimal: bool,\n    /// Two-phase split point; `None` for single-strategy solvers.\n    pub phases: Option<[usize; 2]>,\n}",
+    "fields": [
+      { "name": "moves", "type": "Vec<Move>", "meaning": "The solution in application order; allocated, so this type is not `no_std`." },
+      { "name": "optimal", "type": "bool", "meaning": "Whether the solver claims optimality; both v1 solvers always return `false`." },
+      { "name": "phases", "type": "Option<[usize; 2]>", "meaning": "Phase split point; `None` for single-strategy solvers." }
+    ],
+    "invariants": [
+      "Derived only from a solver run, never stored in `Cube`.",
+      "Not exposed by the wasm API; the browser receives the Singmaster string from `SolveReport`."
+    ],
+    "bytes": null,
+    "source": { "file": "crates/color-cube-solver/src/solver.rs", "symbol": "Solution" }
+  },
+  {
+    "id": "limits",
+    "name": "Limits",
+    "kind": "solver",
+    "rust": "/// Stage limits for a solver.\n#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]\npub struct Limits {\n    /// Maximum combined solution length.\n    pub max_length: Option<u8>,\n    /// Wall-clock budget in milliseconds. `Some(0)` times out before search.\n    pub time_ms: Option<u32>,\n}",
+    "fields": [
+      { "name": "max_length", "type": "Option<u8>", "meaning": "Maximum combined solution length; `None` means no length cap." },
+      { "name": "time_ms", "type": "Option<u32>", "meaning": "Wall-clock budget in milliseconds; `Some(0)` times out before search." }
+    ],
+    "invariants": [
+      "Checked between phases, so a solve can overrun the wall-clock budget inside one phase (D023).",
+      "The browser always calls `solve` with `Limits::default()`."
+    ],
+    "bytes": null,
+    "source": { "file": "crates/color-cube-solver/src/solver.rs", "symbol": "Limits" }
+  },
+  {
+    "id": "twist",
+    "name": "twist",
+    "kind": "coordinate",
+    "rust": "#[must_use]\npub fn twist(cube: &Cube) -> u16 {\n    cube.corner_twist()\n}",
+    "fields": [
+      { "name": "value", "type": "u16", "meaning": "Base-3 encoding of the first seven corner twists; `0..2187`." }
+    ],
+    "invariants": [
+      "`co[7]` is implied by `sum(co) % 3 == 0`, so seven terms are enough.",
+      "Total on every state: no group membership required."
+    ],
+    "bytes": 2,
+    "source": { "file": "crates/color-cube-solver/src/coords.rs", "symbol": "twist" }
+  },
+  {
+    "id": "flip",
+    "name": "flip",
+    "kind": "coordinate",
+    "rust": "#[must_use]\npub fn flip(cube: &Cube) -> u16 {\n    cube.edge_flip()\n}",
+    "fields": [
+      { "name": "value", "type": "u16", "meaning": "Base-2 encoding of the first eleven edge flips; `0..2048`." }
+    ],
+    "invariants": [
+      "`eo[11]` is implied by `sum(eo) % 2 == 0`.",
+      "Total on every state: no group membership required."
+    ],
+    "bytes": 2,
+    "source": { "file": "crates/color-cube-solver/src/coords.rs", "symbol": "flip" }
+  },
+  {
+    "id": "slice",
+    "name": "slice",
+    "kind": "coordinate",
+    "rust": "#[must_use]\npub fn slice(cube: &Cube) -> u16 {\n    cube.slice_combination()\n}",
+    "fields": [
+      { "name": "value", "type": "u16", "meaning": "Combinadic rank of the four middle-slice edge positions; `0..495`, solved is `494`." }
+    ],
+    "invariants": [
+      "Total on every state, but `494` means a clean slice, which is the `G1` condition.",
+      "Never read as a permutation rank: it says which positions, not which pieces."
+    ],
+    "bytes": 2,
+    "source": { "file": "crates/color-cube-solver/src/coords.rs", "symbol": "slice" }
+  },
+  {
+    "id": "cp-rank",
+    "name": "cp_rank",
+    "kind": "coordinate",
+    "rust": "#[must_use]\npub fn cp_rank(cube: &Cube) -> u16 {\n    lehmer_rank(&cube.cp) as u16\n}",
+    "fields": [
+      { "name": "value", "type": "u16", "meaning": "Lehmer rank of the eight-corner permutation; `0..40320`, identity is `0`." }
+    ],
+    "invariants": [
+      "Total on every state: `cp` is always a permutation for a valid cube.",
+      "The ranking function is the solver's own Lehmer code, not a second implementation."
+    ],
+    "bytes": 2,
+    "source": { "file": "crates/color-cube-solver/src/coords.rs", "symbol": "cp_rank" }
+  },
+  {
+    "id": "ep8-rank",
+    "name": "ep8_rank",
+    "kind": "coordinate",
+    "rust": "#[must_use]\npub fn ep8_rank(cube: &Cube) -> u16 {\n    assert!(is_g1(cube), \"ep8 is undefined outside G1\");\n    let mut permutation = [0u8; 8];\n    permutation.copy_from_slice(&cube.ep[..8]);\n    lehmer_rank(&permutation) as u16\n}",
+    "fields": [
+      { "name": "value", "type": "Option<u16>", "meaning": "Lehmer rank of the eight U/D edges in positions `0..8`; `0..40320`, `undefined` outside `G1`." }
+    ],
+    "invariants": [
+      "Defined only when the four middle-slice pieces occupy positions `8..11` (`G1`, D018).",
+      "The wasm view returns `undefined` outside `G1` instead of panicking; compare with `=== undefined`."
+    ],
+    "bytes": 2,
+    "source": { "file": "crates/color-cube-solver/src/coords.rs", "symbol": "ep8_rank" }
+  },
+  {
+    "id": "sp-rank",
+    "name": "sp_rank",
+    "kind": "coordinate",
+    "rust": "#[must_use]\npub fn sp_rank(cube: &Cube) -> u16 {\n    assert!(is_g1(cube), \"sp is undefined outside G1\");\n    let mut permutation = [0u8; 4];\n    for (slot, &piece) in permutation.iter_mut().zip(&cube.ep[8..]) {\n        *slot = piece - 8;\n    }\n    lehmer_rank(&permutation) as u16\n}",
+    "fields": [
+      { "name": "value", "type": "Option<u8>", "meaning": "Rank of the four middle-slice pieces in positions `8..12`; `0..24`, `undefined` outside `G1`." }
+    ],
+    "invariants": [
+      "Defined only on `G1` states (D018); the wasm view returns `undefined` otherwise.",
+      "The four pieces are renumbered `0..3` before ranking, so the rank is slice-relative."
+    ],
+    "bytes": 2,
+    "source": { "file": "crates/color-cube-solver/src/coords.rs", "symbol": "sp_rank" }
+  }
+]

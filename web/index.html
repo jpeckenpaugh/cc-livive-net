@@ -19,10 +19,19 @@
           Rust core + Thistlethwaite in WebAssembly · ≤45 moves · no second JS engine
         </p>
       </div>
-      <label class="toggle">
-        <input id="cb-toggle" type="checkbox" />
-        <span>colour-blind palette</span>
-      </label>
+      <div class="masthead-actions">
+        <a
+          class="source-link"
+          id="source-link"
+          href="https://github.com/jpeckenpaugh/cc-livive-net"
+          target="_blank"
+          rel="noopener"
+        >Source ↗</a>
+        <label class="toggle">
+          <input id="cb-toggle" type="checkbox" />
+          <span>colour-blind palette</span>
+        </label>
+      </div>
     </header>
 
     <main>
@@ -84,23 +93,99 @@
         </div>
       </section>
 
-      <section class="panel" aria-labelledby="inspector-heading">
+      <section class="panel inspector-panel" aria-labelledby="inspector-heading">
         <h2 id="inspector-heading">Inspector</h2>
-        <dl class="inspector">
-          <dt>facelets</dt>
-          <dd id="facelet-count">—</dd>
-          <dt>observation</dt>
-          <dd id="observation-shape">—</dd>
-          <dt>one-hot ones</dt>
-          <dd id="observation-ones">—</dd>
-          <dt>legal moves</dt>
-          <dd id="legal-moves">—</dd>
-        </dl>
-        <p class="hint">
-          Keyboard: <kbd>U</kbd> <kbd>R</kbd> <kbd>F</kbd> <kbd>D</kbd>
-          <kbd>L</kbd> <kbd>B</kbd> for a quarter turn, hold
-          <kbd>Shift</kbd> for counter-clockwise.
-        </p>
+        <div class="tabs">
+          <div class="tablist" role="tablist" aria-label="Inspector views">
+            <button
+              type="button"
+              role="tab"
+              id="tab-live"
+              aria-controls="panel-live"
+              aria-selected="true"
+              tabindex="0"
+            >Live state</button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-types"
+              aria-controls="panel-types"
+              aria-selected="false"
+              tabindex="-1"
+            >Rust types</button>
+          </div>
+
+          <div role="tabpanel" id="panel-live" aria-labelledby="tab-live" tabindex="0">
+            <p class="hint">
+              The solver state is four cubie arrays. The 54 facelets are an
+              output projection of them, not a second state.
+            </p>
+
+            <div class="array-grid" id="live-arrays">
+              <div class="array-block">
+                <h3>cp <span class="array-note">corner permutation</span></h3>
+                <ol id="live-cp" class="piece-row" aria-label="corner permutation"></ol>
+              </div>
+              <div class="array-block">
+                <h3>co <span class="array-note">corner orientation</span></h3>
+                <ol id="live-co" class="piece-row" aria-label="corner orientation"></ol>
+              </div>
+              <div class="array-block">
+                <h3>ep <span class="array-note">edge permutation</span></h3>
+                <ol id="live-ep" class="piece-row" aria-label="edge permutation"></ol>
+              </div>
+              <div class="array-block">
+                <h3>eo <span class="array-note">edge orientation</span></h3>
+                <ol id="live-eo" class="piece-row" aria-label="edge orientation"></ol>
+              </div>
+            </div>
+
+            <dl class="inspector coords">
+              <dt>twist</dt>
+              <dd><span id="coord-twist">—</span> <span class="array-note">0..2187</span></dd>
+              <dt>flip</dt>
+              <dd><span id="coord-flip">—</span> <span class="array-note">0..2048</span></dd>
+              <dt>slice</dt>
+              <dd><span id="coord-slice">—</span> <span class="array-note">0..495, 494 is clean</span></dd>
+              <dt>cp_rank</dt>
+              <dd><span id="coord-cp">—</span> <span class="array-note">0..40320</span></dd>
+              <dt>ep8_rank</dt>
+              <dd><span id="coord-ep8">—</span> <span class="array-note">0..40320, G1 only</span></dd>
+              <dt>sp_rank</dt>
+              <dd><span id="coord-sp">—</span> <span class="array-note">0..24, G1 only</span></dd>
+            </dl>
+            <p class="hint" id="coord-note">
+              <code>ep8</code> and <code>sp</code> are defined only while the
+              four middle-slice edges are in their slice (<code>G1</code>).
+              Outside it they are shown as — because the Rust coordinate
+              functions are not defined there (D018).
+            </p>
+
+            <dl class="inspector">
+              <dt>facelets</dt>
+              <dd id="facelet-count">—</dd>
+              <dt>observation</dt>
+              <dd id="observation-shape">—</dd>
+              <dt>one-hot ones</dt>
+              <dd id="observation-ones">—</dd>
+              <dt>legal moves</dt>
+              <dd id="legal-moves">—</dd>
+            </dl>
+            <p class="hint">
+              Keyboard: <kbd>U</kbd> <kbd>R</kbd> <kbd>F</kbd> <kbd>D</kbd>
+              <kbd>L</kbd> <kbd>B</kbd> for a quarter turn, hold
+              <kbd>Shift</kbd> for counter-clockwise.
+            </p>
+          </div>
+
+          <div role="tabpanel" id="panel-types" aria-labelledby="tab-types" tabindex="0" hidden>
+            <p class="hint">
+              Declarations from the Rust sources, embedded in the wasm and
+              checked against those sources on every CI run.
+            </p>
+            <div id="structure-cards" class="structure-cards"></div>
+          </div>
+        </div>
       </section>
 
       <section class="panel" aria-labelledby="conformance-heading">
@@ -137,6 +222,51 @@
         Thistlethwaite only in the browser (D004). Kociemba stays in the native
         CLI. Tables are embedded in the wasm at build time.
       </p>
+      <nav class="repo-links" aria-label="Repository and documentation">
+        <a
+          id="footer-repo"
+          href="https://github.com/jpeckenpaugh/cc-livive-net"
+          target="_blank"
+          rel="noopener"
+        >repository</a>
+        <a
+          data-source-file="README.md"
+          href="https://github.com/jpeckenpaugh/cc-livive-net/blob/main/README.md"
+          target="_blank"
+          rel="noopener"
+        >README</a>
+        <a
+          data-source-file="docs/RL.md"
+          href="https://github.com/jpeckenpaugh/cc-livive-net/blob/main/docs/RL.md"
+          target="_blank"
+          rel="noopener"
+        >docs/RL.md</a>
+        <a
+          data-source-file="docs/SOLVERS.md"
+          href="https://github.com/jpeckenpaugh/cc-livive-net/blob/main/docs/SOLVERS.md"
+          target="_blank"
+          rel="noopener"
+        >docs/SOLVERS.md</a>
+        <a
+          data-source-file="docs/PROVENANCE.md"
+          href="https://github.com/jpeckenpaugh/cc-livive-net/blob/main/docs/PROVENANCE.md"
+          target="_blank"
+          rel="noopener"
+        >docs/PROVENANCE.md</a>
+        <a
+          data-source-file="LICENSE-MIT"
+          href="https://github.com/jpeckenpaugh/cc-livive-net/blob/main/LICENSE-MIT"
+          target="_blank"
+          rel="noopener"
+        >MIT licence</a>
+        <a
+          data-source-file="LICENSE-APACHE"
+          href="https://github.com/jpeckenpaugh/cc-livive-net/blob/main/LICENSE-APACHE"
+          target="_blank"
+          rel="noopener"
+        >Apache-2.0 licence</a>
+        <a href="#provenance-heading">build provenance</a>
+      </nav>
     </footer>
 
     <script type="module" src="./app.js"></script>

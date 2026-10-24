@@ -394,6 +394,21 @@ instead of slowing every build.
 outside `/work` or `/alt` is out of contract and must be remapped before it can
 be used as evidence.
 
+## D033 — Structure documentation is source-linked and drift-checked
+
+**Context.** A hand-written "Rust types" page will silently rot when the core
+structs change; a live view that duplicates state logic would violate the
+single-implementation rule.
+**Decision.** `web/structures.json` is the single metadata source, embedded in
+the wasm crate and served to the page. `scripts/check-structures.mjs` asserts
+every declaration snippet is a verbatim substring of the named Rust file and
+that fixed-layout byte sizes match. The live tab calls the new `cube_view` wasm
+export; the page never computes cube state. Solver-only types are labelled and
+carry `bytes: null`.
+**Consequence.** CI fails when a struct changes without the page; the page stays
+educational without violating "no second JS engine".
+
+
 
 
 

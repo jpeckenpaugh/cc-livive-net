@@ -90,6 +90,64 @@ async function run() {
     check((await page.title()).includes("cc.livive.net"), "unexpected page title");
   });
 
+  await attempt("Source link points at the repository", async () => {
+    const href = await page.locator("#source-link").getAttribute("href");
+    check(
+      href === "https://github.com/jpeckenpaugh/cc-livive-net",
+      `unexpected source href: ${href}`,
+    );
+    check(
+      (await page.locator("#source-link").getAttribute("rel"))?.includes("noopener"),
+      "source link missing rel=noopener",
+    );
+    check(
+      (await page.locator("#source-link").getAttribute("target")) === "_blank",
+      "source link does not open a new tab",
+    );
+  });
+
+  await attempt("Rust types tab shows Cube and a pinned source link", async () => {
+    await page.locator("#tab-types").click();
+    check(await page.locator("#panel-types").isVisible(), "types panel not visible");
+    check(await page.locator("#panel-live").isHidden(), "live panel still visible");
+    const card = page.locator('[data-structure="cube"]');
+    check(await card.isVisible(), "Cube card missing");
+    check((await card.textContent()).includes("pub struct Cube"), "Cube declaration missing");
+    const href = await card.locator("a").getAttribute("href");
+    check(
+      /^https:\/\/github\.com\/.+\/blob\/(main|[0-9a-f]{40})\/crates\/color-cube\/src\/lib\.rs$/.test(
+        href,
+      ),
+      `unexpected card link: ${href}`,
+    );
+  });
+
+  await attempt("tab keyboard navigation follows the WAI-ARIA pattern", async () => {
+    await page.locator("#tab-live").click();
+    await page.locator("#tab-live").focus();
+    await page.keyboard.press("ArrowRight");
+    check(
+      (await page.locator("#tab-types").getAttribute("aria-selected")) === "true",
+      "ArrowRight did not select Rust types",
+    );
+    check(await page.locator("#panel-types").isVisible(), "ArrowRight did not show types panel");
+    await page.keyboard.press("Home");
+    check(
+      (await page.locator("#tab-live").getAttribute("aria-selected")) === "true",
+      "Home did not select Live state",
+    );
+    check(await page.locator("#panel-live").isVisible(), "Home did not show the live panel");
+  });
+
+  await attempt("applying a move updates the live cp row", async () => {
+    await page.locator("#reset").click();
+    const before = await page.locator("#live-cp").textContent();
+    await page.locator("#moves button", { hasText: /^R$/ }).click();
+    const after = await page.locator("#live-cp").textContent();
+    check(before !== after, "cp row did not change after R");
+    check(after.includes("—") === false, "cp row still has placeholder text");
+  });
+
   await attempt("canvas is present, 3D, and non-blank", async () => {
     check((await page.locator("#cube").count()) === 1, "canvas missing");
     // Reset the camera so sampling is deterministic.
@@ -180,6 +238,19 @@ async function run() {
     const after = await page.evaluate(() => window.__cc.facelets());
     check(JSON.stringify(before.facelets) !== JSON.stringify(after), "facelets did not change");
     check((await page.evaluate(() => window.__cc.lastError())) === null, "app recorded an error");
+  });
+
+  await attempt("375px layout does not overflow horizontally", async () => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof window.__cc === "object", null, { timeout: 60_000 });
+    const width = await page.evaluate(() => window.innerWidth);
+    const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
+    check(scroll <= width + 1, `live tab overflows: ${scroll} > ${width}`);
+    await page.locator("#tab-types").click();
+    const typesScroll = await page.evaluate(() => document.documentElement.scrollWidth);
+    check(typesScroll <= width + 1, `types tab overflows: ${typesScroll} > ${width}`);
+    await page.screenshot({ path: resolve("artifacts", "browser-mobile.png"), fullPage: true });
   });
 
   await attempt("no console errors or unhandled rejections", async () => {

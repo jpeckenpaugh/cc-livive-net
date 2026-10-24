@@ -23,6 +23,9 @@ done
 section "fmt"
 ./scripts/docker.sh cargo fmt --all -- --check
 
+section "structures drift"
+./scripts/docker.sh node scripts/check-structures.mjs
+
 if [ "$missing" -eq 1 ]; then
   section "generate tables"
   ./scripts/gen-tables.sh

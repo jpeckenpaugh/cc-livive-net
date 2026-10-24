@@ -22,7 +22,7 @@ From `concept.md` §18, with evidence:
 - [x] The CLI solves any uniform random cube with ≤30 moves, replay-verified and
       deterministic — M3 gate (1,000 cubes, 16–22 moves, mean 19.86).
 - [x] `cc.livive.net` scrambles and solves in the browser without a JavaScript
-      cube implementation — M4b browser gate (10 assertions); `web/app.js` holds
+      cube implementation — M4b browser gate (15 assertions); `web/app.js` holds
       only facelets and calls the wasm exports. **Live:** HTTP 200 on
       `bbcc848`-era build, deployed `.wasm` SHA-256 matches the local build.
 - [x] Documentation, licensing, and benchmarks let an external user start —
@@ -36,8 +36,10 @@ _(append-only, newest first)_
 | Date | Gate | Result |
 |---|---|---|
 | 2026-10-24 | A provenance | pass: image pinned (index digests, amd64+arm64), offline wasm-pack cache proved with `--network none`, wasm `dd159465…`; `repro-check.sh --allow-dirty` PASS `/work` vs `/alt` on arm64 and amd64 (same hash); clean run pending commit |
+| 2026-10-24 | B check | pass: 94 Node assertions, 15 browser assertions, structure drift guard, wasm 8,103,757 B |
+| 2026-10-24 | A repro | pass: clean HEAD, arm64, wasm/js/gzip/tables all MATCH |
 | 2026-10-24 | CI + deploy | pass: rust, wasm, browser jobs green on `bbcc848`; Pages live, deployed wasm hash matches local |
-| 2026-10-24 | M5 check | pass: `check.sh` (35 Node assertions), `browser-smoke.sh` (10), `cargo doc` clean, bench n=100 |
+| 2026-10-24 | M5 check | pass: `check.sh` (94 Node assertions), `browser-smoke.sh` (15), `cargo doc` clean, bench n=100 |
 | 2026-10-24 | M4b browser | pass: 10 Playwright assertions, screenshot at artifacts/browser-pass.png |
 | 2026-10-24 | M4a check | pass: scripts/check.sh end-to-end, 35 Node assertions, wasm 7.71 MiB raw / 2.63 MiB gzip |
 | 2026-10-24 | M3 check | pass: 1000 cubes 16–22 moves (mean 19.86), phase bounds 12/18, CLI kociemba replays |

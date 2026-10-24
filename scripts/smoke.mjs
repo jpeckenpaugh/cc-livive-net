@@ -46,6 +46,10 @@ function sameBytes(a, b) {
   return true;
 }
 
+function sameValues(actual, expected) {
+  return sameBytes(Array.from(actual), expected);
+}
+
 // --- static surface -------------------------------------------------------
 
 const solved = wasm.solved_facelets();
@@ -120,6 +124,60 @@ throws(() => wasm.solve(new Uint8Array(53)), "short facelet array");
 throws(() => wasm.solve(new Uint8Array(54).fill(6)), "out-of-range colour");
 throws(() => wasm.facelets_after("U2 Q"), "unknown move token");
 throws(() => wasm.observe(new Uint8Array(54).fill(9)), "observe rejects bad colours");
+
+// --- inspector view -------------------------------------------------------
+
+const view = wasm.cube_view(solved);
+ok(sameValues(view.cp, [0, 1, 2, 3, 4, 5, 6, 7]), "cube_view cp of solved");
+ok(sameValues(view.co, [0, 0, 0, 0, 0, 0, 0, 0]), "cube_view co of solved");
+ok(
+  sameValues(view.ep, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
+  "cube_view ep of solved",
+);
+ok(sameValues(view.eo, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), "cube_view eo of solved");
+equal(view.twist, 0, "solved twist");
+equal(view.flip, 0, "solved flip");
+equal(view.slice, 494, "solved slice");
+equal(view.cp_rank, 0, "solved cp_rank");
+equal(view.ep8_rank, 0, "solved ep8_rank");
+equal(view.sp_rank, 0, "solved sp_rank");
+equal(view.is_valid, true, "solved is_valid");
+equal(view.is_solved, true, "solved is_solved");
+equal(view.cube_bytes, 40, "Cube size at the wasm boundary");
+
+const afterR = wasm.cube_view(wasm.facelets_after("R"));
+equal(afterR.ep8_rank, undefined, "ep8_rank is undefined outside G1");
+equal(afterR.sp_rank, undefined, "sp_rank is undefined outside G1");
+ok(afterR.slice !== 494, "R dirties the slice");
+ok(afterR.cp_rank >= 0, "cp_rank stays total outside G1");
+
+throws(() => wasm.cube_view(new Uint8Array(53)), "cube_view rejects short facelets");
+throws(() => wasm.cube_view(new Uint8Array(54).fill(9)), "cube_view rejects bad colours");
+
+const meta = JSON.parse(wasm.data_structure_meta());
+ok(Array.isArray(meta) && meta.length >= 13, "structure metadata has every entry");
+const metaIds = new Set(meta.map((entry) => entry.id));
+for (const id of [
+  "cube",
+  "move",
+  "color",
+  "scramble",
+  "solution",
+  "limits",
+  "cube-error",
+  "twist",
+  "flip",
+  "slice",
+  "cp-rank",
+  "ep8-rank",
+  "sp-rank",
+]) {
+  ok(metaIds.has(id), `structure metadata includes ${id}`);
+}
+for (const entry of meta) {
+  ok(typeof entry.rust === "string" && entry.rust.length > 0, `${entry.id} has a declaration`);
+  ok(typeof entry.source?.file === "string", `${entry.id} names a source file`);
+}
 
 // --- conformance suite ----------------------------------------------------
 

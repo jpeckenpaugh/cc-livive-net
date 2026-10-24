@@ -20,6 +20,7 @@ use std::sync::OnceLock;
 use color_cube::{
     parse_moves, write_singmaster, Color, Cube, Move, N_COLORS, N_FACELETS, N_MOVES, N_OBSERVATIONS,
 };
+use color_cube_solver::coords;
 use color_cube_solver::{Limits, SolveError, Solver, Thistlethwaite};
 use wasm_bindgen::prelude::*;
 
@@ -148,6 +149,165 @@ pub fn solve_report(facelets: &[u8]) -> Result<SolveReport, JsValue> {
         elapsed_ms,
         solver: String::from("thistlethwaite"),
     })
+}
+
+/// Read-only projection of the core cubie state for the browser inspector.
+///
+/// Every getter returns an owned copy: the wasm boundary never aliases the
+/// core arrays. The browser treats this as a derived view of its one facelet
+/// snapshot, not as a second state store.
+///
+/// `ep8_rank` and `sp_rank` exist only on `G1` states (D018). Outside `G1`
+/// they are `None`, which `wasm-bindgen` surfaces as JavaScript `undefined`.
+/// Compare with `value === undefined`, never truthiness: rank `0` is valid.
+#[wasm_bindgen]
+#[derive(Debug)]
+pub struct CubeView {
+    cp: [u8; 8],
+    co: [u8; 8],
+    ep: [u8; 12],
+    eo: [u8; 12],
+    twist: u16,
+    flip: u16,
+    slice: u16,
+    cp_rank: u16,
+    ep8_rank: Option<u16>,
+    sp_rank: Option<u8>,
+    valid: bool,
+    solved: bool,
+    cube_bytes: u32,
+}
+
+#[wasm_bindgen]
+impl CubeView {
+    /// Piece index at each of the eight corner positions.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn cp(&self) -> Vec<u8> {
+        self.cp.to_vec()
+    }
+
+    /// Corner orientation at each position, `0..3`.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn co(&self) -> Vec<u8> {
+        self.co.to_vec()
+    }
+
+    /// Piece index at each of the twelve edge positions.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn ep(&self) -> Vec<u8> {
+        self.ep.to_vec()
+    }
+
+    /// Edge orientation at each position, `0..2`.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn eo(&self) -> Vec<u8> {
+        self.eo.to_vec()
+    }
+
+    /// Seven-term corner-twist coordinate, `0..2187`.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn twist(&self) -> u16 {
+        self.twist
+    }
+
+    /// Eleven-term edge-flip coordinate, `0..2048`.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn flip(&self) -> u16 {
+        self.flip
+    }
+
+    /// Middle-slice combination coordinate, `0..495`; `494` is a clean slice.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn slice(&self) -> u16 {
+        self.slice
+    }
+
+    /// Lehmer rank of the corner permutation, `0..40320`.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn cp_rank(&self) -> u16 {
+        self.cp_rank
+    }
+
+    /// Rank of the eight U/D edges, `0..40320`; `undefined` outside `G1`.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn ep8_rank(&self) -> Option<u16> {
+        self.ep8_rank
+    }
+
+    /// Rank of the four middle edges, `0..24`; `undefined` outside `G1`.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn sp_rank(&self) -> Option<u8> {
+        self.sp_rank
+    }
+
+    /// Whether the decoded state satisfies every cube invariant.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        self.valid
+    }
+
+    /// Whether the state is the identity cube.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn is_solved(&self) -> bool {
+        self.solved
+    }
+
+    /// `core::mem::size_of::<Cube>()` for the target that built this module.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn cube_bytes(&self) -> u32 {
+        self.cube_bytes
+    }
+}
+
+/// Decodes 54 colour indices and returns the inspector view of the state.
+///
+/// `ep8_rank` and `sp_rank` are `undefined` outside `G1` (D018).
+///
+/// # Errors
+///
+/// Throws a JavaScript `Error` for malformed facelets, matching [`solve`].
+#[wasm_bindgen]
+pub fn cube_view(facelets: &[u8]) -> Result<CubeView, JsValue> {
+    let cube = parse_facelets(facelets)?;
+    let g1 = coords::is_g1(&cube);
+    Ok(CubeView {
+        cp: cube.cp,
+        co: cube.co,
+        ep: cube.ep,
+        eo: cube.eo,
+        twist: coords::twist(&cube),
+        flip: coords::flip(&cube),
+        slice: coords::slice(&cube),
+        cp_rank: coords::cp_rank(&cube),
+        ep8_rank: g1.then(|| coords::ep8_rank(&cube)),
+        sp_rank: g1.then(|| coords::sp_rank(&cube) as u8),
+        valid: cube.is_valid(),
+        solved: cube.is_solved(),
+        cube_bytes: core::mem::size_of::<Cube>() as u32,
+    })
+}
+
+/// Returns the embedded structure metadata used by the Rust types tab.
+///
+/// The JSON is the same `web/structures.json` that `scripts/check-structures.mjs`
+/// verifies against the source, so the page and the drift guard cannot disagree.
+#[wasm_bindgen]
+#[must_use]
+pub fn data_structure_meta() -> String {
+    include_str!("../../../web/structures.json").to_string()
 }
 
 /// Applies a Singmaster move string to the solved cube and returns facelets.
@@ -544,6 +704,17 @@ impl Checks {
 #[cfg(test)]
 mod tests {
     use super::decode_facelets;
+    use color_cube::{Color, Cube, Move, Scramble};
+
+    #[test]
+    fn structure_sizes_match_metadata() {
+        // Mirrors the hard-coded table in scripts/check-structures.mjs. A change
+        // here must update web/structures.json and the guard together.
+        assert_eq!(core::mem::size_of::<Cube>(), 40);
+        assert_eq!(core::mem::size_of::<Move>(), 1);
+        assert_eq!(core::mem::size_of::<Color>(), 1);
+        assert_eq!(core::mem::size_of::<Scramble>(), 33);
+    }
 
     #[test]
     fn rejects_wrong_length() {
