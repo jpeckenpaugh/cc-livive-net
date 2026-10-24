@@ -39,7 +39,10 @@ function run(command, args) {
 }
 
 function git(args) {
-  return run("git", ["-C", ROOT, ...args]);
+  // Mounted repositories are frequently owned by a different uid inside the
+  // container; without this, git refuses with "dubious ownership", `dirty`
+  // becomes null, and source links silently fall back to main.
+  return run("git", ["-c", "safe.directory=*", "-C", ROOT, ...args]);
 }
 
 function sha256(data) {
