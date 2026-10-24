@@ -52,6 +52,17 @@ function fail(error) {
   setStatus(lastError, "error");
 }
 
+let sourceLoaded = false;
+
+/// Provenance is optional and only matters for commit-pinned source links, so
+/// it is fetched when the Rust-types tab is first opened, never at page load.
+async function ensureSource() {
+  if (sourceLoaded) return;
+  sourceLoaded = true;
+  await loadSource();
+  applySourceLinks();
+}
+
 async function loadSource() {
   try {
     const response = await fetch("./provenance.json", { cache: "no-cache" });
@@ -233,6 +244,7 @@ function setupTabs() {
       tab.tabIndex = active ? 0 : -1;
       panels[index].hidden = !active;
     });
+    if (panels[tabs.indexOf(target)]?.id === "panel-structures") void ensureSource();
     if (focus) target.focus();
   }
 
@@ -544,7 +556,6 @@ async function main() {
   try {
     await init();
     renderer = createRenderer(canvas);
-    await loadSource();
     applySourceLinks();
     buildLiveArrays();
     buildStructureCards();

@@ -22,7 +22,7 @@ Measured, not aspirational. Dates and machine context are in
 | M1 | Seeded scrambles, notation, observations, masks | Done | 32 golden hashes, 10k seeds |
 | M2 | Coordinates, tables, Thistlethwaite | Done | ≤41 moves on 1,000 cubes, median 0.12–0.25 ms |
 | M3 | Kociemba two-phase | Done | 16–22 moves (mean 19.86), median 245–302 ms |
-| M4 | WASM wrapper, browser demo, Pages | Done | 7.71 MiB raw / 2.63 MiB gzip; 10 browser assertions |
+| M4 | WASM wrapper, browser demo, Pages | Done | 7.73 MiB raw / 2.64 MiB gzip; 15 browser assertions |
 | M5 | Docs, licensing, benchmarks | Done | this README, `docs/RL.md`, `docs/SOLVERS.md`, `bench` |
 | M6 | Optional optimal oracle | Partial | proves short distances; superflip not proved in 5 min (D029) |
 

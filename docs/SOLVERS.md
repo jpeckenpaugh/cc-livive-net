@@ -110,7 +110,7 @@ also exhaustively checks the `G3` space (663,552 reachable states, diameter 15).
 Table generation must precede compilation because the WASM crate embeds both
 bundles with `include_bytes!` (D027). `scripts/check.sh` generates them when
 missing. The browser bundle contains the move tables and Thistlethwaite
-distances only: 8,088,272 bytes raw / 2,762,690 bytes gzip (7.71 MiB / 2.63 MiB)
+distances only: 8,103,757 bytes raw / 2,767,492 bytes gzip (7.73 MiB / 2.64 MiB)
 as measured by `scripts/smoke.mjs` in the M5 gate.
 
 ## Replay guarantee

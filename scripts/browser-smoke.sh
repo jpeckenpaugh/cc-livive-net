@@ -22,6 +22,14 @@ fi
 
 mkdir -p artifacts
 
+# The page fetches provenance only when the Rust-types tab is opened, but the
+# browser spec does open it. Generate it when a developer has not run check.sh
+# yet, so a missing file can never look like a UI failure.
+if [ ! -f web/provenance.json ]; then
+  echo "== provenance =="
+  CC_CHECK=pass ./scripts/docker.sh node scripts/provenance.mjs
+fi
+
 echo "== browser smoke =="
 ./scripts/docker.sh browser bash -c '
   set -euo pipefail
