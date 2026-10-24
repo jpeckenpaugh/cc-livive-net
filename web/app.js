@@ -1,19 +1,26 @@
 // Stateless browser front end (D026/D028): the only cube-shaped value in JS is
 // the last 54-facelet snapshot returned by the wasm module. Every operation
-// sends that snapshot back with a move string and stores the new result.
+// sends that snapshot back with a move string and stores the new result. The
+// canvas renderer adds camera state, never move logic.
 import init, * as cube from "./pkg/color_cube_wasm.js";
+import { createRenderer } from "./renderer.js";
 
 const FACES = ["U", "R", "F", "D", "L", "B"];
 const COLOR_LETTERS = ["U", "D", "F", "B", "R", "L"];
 const PAIR_DELAY_MS = 110;
+const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
+const canvas = document.querySelector("#cube");
 const net = document.querySelector("#net");
+const viewToggle = document.querySelector("#view-toggle");
 const statusLine = document.querySelector("#status");
 const moveCount = document.querySelector("#move-count");
 const solutionLength = document.querySelector("#solution-length");
 const solverTime = document.querySelector("#solver-time");
 const sequenceInput = document.querySelector("#sequence");
 const conformanceOutput = document.querySelector("#conformance");
+const paletteToggle = document.querySelector("#cb-toggle");
+const playButton = document.querySelector("#play");
 
 const state = {
   facelets: new Uint8Array(0),
@@ -24,6 +31,9 @@ const state = {
 
 let moveNames = [];
 let stickers = [];
+let renderer = null;
+let lastError = null;
+let netVisible = false;
 
 function setStatus(message, tone = "") {
   statusLine.textContent = message;
@@ -31,7 +41,8 @@ function setStatus(message, tone = "") {
 }
 
 function fail(error) {
-  setStatus(error instanceof Error ? error.message : String(error), "error");
+  lastError = error instanceof Error ? error.message : String(error);
+  setStatus(lastError, "error");
 }
 
 function buildNet() {
@@ -59,6 +70,7 @@ function render() {
     sticker.dataset.colour = String(colour);
     sticker.textContent = COLOR_LETTERS[colour] ?? "?";
   }
+  if (renderer) renderer.setFacelets(state.facelets);
 }
 
 function updateInspector() {
@@ -83,6 +95,7 @@ function refresh() {
   render();
   moveCount.textContent = String(state.history.length);
   solutionLength.textContent = state.solution.length > 0 ? String(state.solution.length) : "—";
+  playButton.disabled = state.playing || state.solution.length === 0;
   updateInspector();
 }
 
@@ -93,6 +106,7 @@ function reset() {
   state.solution = [];
   sequenceInput.value = "";
   solverTime.textContent = "—";
+  lastError = null;
   refresh();
   setStatus("solved state");
 }
@@ -127,8 +141,9 @@ function scramble() {
     state.history = text.split(/\s+/).filter(Boolean);
     state.solution = [];
     solverTime.textContent = "—";
+    lastError = null;
     refresh();
-    setStatus(`scrambled with seed ${seed}`);
+    setStatus(`scrambled with seed ${seed} · 25 moves`);
   } catch (error) {
     fail(error);
   }
@@ -142,6 +157,7 @@ function solve() {
     const wall = performance.now() - started;
     const moves = report.moves.split(/\s+/).filter(Boolean);
     state.solution = moves;
+    lastError = null;
     if (moves.length === 0) {
       solverTime.textContent = "0 ms";
       setStatus("already solved");
@@ -157,15 +173,21 @@ function solve() {
   }
 }
 
+function playbackDelay() {
+  return REDUCED_MOTION.matches ? 0 : PAIR_DELAY_MS;
+}
+
 async function play() {
   if (state.playing || state.solution.length === 0) return;
   state.playing = true;
   setStatus("playing solution…");
+  refresh();
   try {
     for (const token of state.solution) {
       applyToken(token);
       refresh();
-      await new Promise((resolve) => setTimeout(resolve, PAIR_DELAY_MS));
+      const delay = playbackDelay();
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
     }
     state.solution = [];
     refresh();
@@ -174,6 +196,7 @@ async function play() {
     fail(error);
   } finally {
     state.playing = false;
+    refresh();
   }
 }
 
@@ -216,6 +239,16 @@ async function runConformance() {
   }
 }
 
+function setNetVisible(show) {
+  netVisible = show;
+  net.hidden = !show;
+  if (renderer) {
+    canvas.hidden = show;
+  }
+  viewToggle.setAttribute("aria-pressed", String(show));
+  viewToggle.textContent = show ? "Show cube" : "Show net";
+}
+
 function wireEvents() {
   document.querySelector("#scramble").addEventListener("click", scramble);
   document.querySelector("#solve").addEventListener("click", solve);
@@ -242,8 +275,10 @@ function wireEvents() {
     }
   });
   document.querySelector("#run-conformance").addEventListener("click", runConformance);
-  document.querySelector("#cb-toggle").addEventListener("change", (event) => {
+  viewToggle.addEventListener("click", () => setNetVisible(!netVisible));
+  paletteToggle.addEventListener("change", (event) => {
     document.body.classList.toggle("cb", event.target.checked);
+    if (renderer) renderer.setPalette(event.target.checked);
   });
 
   window.addEventListener("keydown", (event) => {
@@ -265,14 +300,39 @@ function wireEvents() {
   });
 }
 
+// Minimal read-only hook for the Playwright spec. Frozen, closure-backed, and
+// never exposes the live Uint8Array or any mutation path.
+function installTestHook() {
+  const solvedFacelets = Array.from(cube.solved_facelets());
+  const hook = {
+    facelets: () => Array.from(state.facelets),
+    solved: () =>
+      state.facelets.length === solvedFacelets.length &&
+      solvedFacelets.every((value, index) => state.facelets[index] === value),
+    lastError: () => lastError,
+    moveCount: () => state.history.length,
+    playing: () => state.playing,
+    view: () => (renderer ? renderer.view() : null),
+  };
+  Object.defineProperty(window, "__cc", {
+    value: Object.freeze(hook),
+    writable: false,
+    configurable: false,
+    enumerable: false,
+  });
+}
+
 async function main() {
   buildNet();
   try {
     await init();
+    renderer = createRenderer(canvas);
     moveNames = Array.from(cube.move_names());
     buildMoveButtons();
     wireEvents();
+    setNetVisible(false);
     reset();
+    installTestHook();
   } catch (error) {
     fail(error);
     setStatus(`failed to load wasm: ${error instanceof Error ? error.message : error}`, "error");

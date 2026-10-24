@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1
+#
+# Browser test image for M4b. Deliberately separate from docker/Dockerfile so
+# the dev image and scripts/check.sh stay browser-free (D026).
+#
+# Build after cc-livive-dev:latest exists:
+#   ./scripts/docker.sh browser-build
+# Use:
+#   ./scripts/browser-smoke.sh
+#
+FROM cc-livive-dev:latest
+
+ARG PLAYWRIGHT_VERSION=1.64.1
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0
+
+WORKDIR /opt/browser
+
+RUN npm init -y >/dev/null \
+ && npm install --omit=dev --no-audit --no-fund "playwright@${PLAYWRIGHT_VERSION}" \
+ && npx playwright install --with-deps chromium \
+ && rm -rf /var/lib/apt/lists/* /root/.npm
+
+ENV NODE_PATH=/opt/browser/node_modules

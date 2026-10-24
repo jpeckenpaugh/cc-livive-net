@@ -8,6 +8,7 @@
       name="description"
       content="A stateless 3×3×3 colour-cube demo running the Rust core and Thistlethwaite solver as WebAssembly."
     />
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
@@ -27,7 +28,25 @@
     <main>
       <section class="panel cube-panel" aria-labelledby="cube-heading">
         <h2 id="cube-heading" class="sr-only">Cube</h2>
-        <div id="net" class="net" role="img" aria-label="Unfolded cube net"></div>
+        <div class="cube-stage">
+          <canvas
+            id="cube"
+            class="cube-canvas"
+            width="640"
+            height="640"
+            tabindex="0"
+            aria-label="Isometric cube. Drag to rotate, scroll to zoom, double-click to reset the view."
+          >
+            Isometric cube view. Use “Show net” for a flat, text-labelled layout.
+          </canvas>
+        </div>
+        <div class="view-row">
+          <button id="view-toggle" type="button" aria-pressed="false" aria-controls="net">
+            Show net
+          </button>
+          <span class="hint view-hint">drag to rotate · scroll to zoom · double-click to reset</span>
+        </div>
+        <div id="net" class="net" role="img" aria-label="Unfolded cube net" hidden></div>
         <p id="status" class="status" aria-live="polite">loading wasm…</p>
       </section>
 

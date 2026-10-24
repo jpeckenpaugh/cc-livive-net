@@ -9,8 +9,8 @@ Docker and was committed to `main`.
 | M1 | Seeded scrambles, notation, observations, action mask | Done | `feat(core)` | Frozen 36-draw contract, 32 golden hashes |
 | M2 | Coordinates, move tables, Thistlethwaite | Done | `feat(solver)` | Max 7/10/13/15, worst 41 moves, median 0.12 ms |
 | M3 | Kociemba two-phase, table manifest | Done | `feat(solver)` | 16–22 moves (mean 19.86), ≤30; median 245 ms, documented miss vs 50 ms |
-| M4 | WASM wrapper, browser demo, Pages | In progress | `feat(wasm)` | Bindings + Node smoke + CI/Pages done; 3D canvas and browser test remain |
-| M5 | README, RL docs, benchmarks, optional PyO3 | Not started | — | |
+| M4 | WASM wrapper, browser demo, Pages | Done | `feat(wasm)` | Isometric canvas, Playwright smoke, Pages workflow |
+| M5 | README, RL docs, benchmarks, optional PyO3 | Next | — | |
 | M6 | Optional optimal oracle | Not started | — | |
 
 ## Gate log
@@ -19,6 +19,7 @@ _(append-only, newest first)_
 
 | Date | Gate | Result |
 |---|---|---|
+| 2026-10-24 | M4b browser | pass: 10 Playwright assertions, screenshot at artifacts/browser-pass.png |
 | 2026-10-24 | M4a check | pass: scripts/check.sh end-to-end, 35 Node assertions, wasm 7.71 MiB raw / 2.63 MiB gzip |
 | 2026-10-24 | M3 check | pass: 1000 cubes 16–22 moves (mean 19.86), phase bounds 12/18, CLI kociemba replays |
 | 2026-10-24 | M2b check | pass: 1000 uniform cubes replay-verified ≤45 (worst 41), diameters 7/10/13/15, CLI smoke |
