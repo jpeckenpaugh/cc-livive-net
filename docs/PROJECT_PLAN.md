@@ -11,8 +11,18 @@ only when its gate passes in Docker and the work is committed to `main`.
 | M2 | Coordinates + move tables + Thistlethwaite | 1,000 random cubes solved, ≤45 moves, replayed |
 | M3 | Kociemba two-phase + table manifest | 1,000 random cubes solved, ≤30 moves, deterministic, replayed |
 | M4 | WASM wrapper + static site + Pages | headless browser solves a seeded scramble end-to-end |
-| M5 | Docs polish, RL guide, benchmarks, optional PyO3 | external user can train a toy agent from the README |
+| M5 | Docs polish, RL guide, benchmarks | external user can train a toy agent from the README |
 | M6 | Optional optimal oracle | superflip proven at distance 20 |
+
+## Delivered vs deferred (M5)
+
+- **Delivered:** root README with a verified quickstart, `docs/RL.md`,
+  `docs/SOLVERS.md`, dual MIT/Apache-2.0 licensing with attribution, a `bench`
+  CLI subcommand, fresh measured numbers, and the v1 definition-of-done
+  checklist in `docs/STATUS.md`.
+- **Deferred:** Python/PyO3 bindings (`concept.md` §17.6); the optimal oracle
+  (M6); the showcase recording (D005); the symmetry-reduced Kociemba phase-1
+  table (D024/D025).
 
 ## Sequencing notes
 

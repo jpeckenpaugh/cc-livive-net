@@ -4,9 +4,9 @@
 //!
 //! | Phase | Allowed moves | Coordinate |
 //! |---|---|---|
-//! | 1 | all 18 | `flip * 495 + slice` |
-//! | 2 | `G1` (14) | `twist` |
-//! | 3 | `G2` (10) | corner-tetrad rank × U/D-edge-orbit rank |
+//! | 1 | all 18 | `flip` |
+//! | 2 | `G1` (14) | `(twist, slice)` |
+//! | 3 | `G2` (10) | `cp_rank × U/D-edge-orbit rank` |
 //! | 4 | `G3` (6) | `cp_rank` and `ep_full = ep8 * 24 + sp` |
 //!
 //! Phases 1–3 use exact BFS distance tables and deterministic greedy descent.
@@ -613,9 +613,9 @@ fn in_corner_square_subgroup(cp: &[u8; 8]) -> bool {
 const GOAL_CORNER_MASK: u8 = 0b0101_1010;
 #[allow(dead_code)]
 const GOAL_EDGE_MASK: u8 = 0b1010_1010;
-/// Rank of [`GOAL_CORNER_MASK`] under the combinadic pattern ranking.
+/// Rank of `GOAL_CORNER_MASK` under the combinadic pattern ranking.
 pub const GOAL_CORNER_PATTERN: u8 = 23;
-/// Rank of [`GOAL_EDGE_MASK`] under the combinadic pattern ranking.
+/// Rank of `GOAL_EDGE_MASK` under the combinadic pattern ranking.
 pub const GOAL_EDGE_PATTERN: u8 = 49;
 const CORNER_TETRAD_B: [bool; 8] = [false, true, false, true, true, false, true, false];
 const EDGE_ORBIT_B: [bool; 12] = [
