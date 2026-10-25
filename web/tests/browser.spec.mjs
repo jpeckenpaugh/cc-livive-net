@@ -9,6 +9,7 @@
 import { createRequire } from "node:module";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
+import { deriveHint, faceOfToken } from "../hints.js";
 
 const require = createRequire(process.env.PLAYWRIGHT_PACKAGE ?? "/opt/browser/package.json");
 const { chromium } = require("playwright");
@@ -71,6 +72,28 @@ async function sampleCanvas(page) {
       label: canvas.getAttribute("aria-label"),
     };
   });
+}
+
+async function readHints(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll("[data-hint-cell]")].map((cell) => ({
+      cell: cell.dataset.hintCell,
+      face: cell.dataset.hintFace,
+      axis: cell.dataset.axis,
+      state: cell.dataset.state,
+      direction: cell.dataset.direction,
+      lit: [...cell.querySelectorAll(".chev.lit")].map((chevron) => chevron.dataset.dir),
+      label: cell.getAttribute("aria-label"),
+      classes: [...cell.classList],
+    })),
+  );
+}
+
+async function applyHintsMove(page, token) {
+  await page.locator("#reset").click();
+  await page.locator("#sequence").fill(token);
+  await page.locator("#sequence").press("Enter");
+  await page.waitForFunction(() => window.__cc.moveCount() === 1);
 }
 
 async function run() {
@@ -226,8 +249,142 @@ async function run() {
     check(await page.locator("#cube").isVisible(), "canvas disappeared with the net");
   });
 
+  await attempt("net has 12 perimeter hint cells and F/R in-face indicators", async () => {
+    await page.locator("#reset").click();
+    const hints = await readHints(page);
+    const perimeter = hints.filter((hint) => hint.cell === "perimeter");
+    check(perimeter.length === 12, `expected 12 perimeter hints, got ${perimeter.length}`);
+    for (const face of ["U", "D", "L", "B"]) {
+      const cells = perimeter.filter((hint) => hint.face === face);
+      check(cells.length === 3, `${face} edge has ${cells.length} hint cells`);
+      check(
+        cells.every((hint) => hint.classes.includes(`hint-${face}`)),
+        `${face} hint cells lack the hint-${face} class`,
+      );
+    }
+    const faceHints = hints.filter((hint) => hint.cell === "face");
+    check(
+      faceHints.length === 2 &&
+        faceHints.every((hint) => ["F", "R"].includes(hint.face) && hint.classes.includes("face-hint")),
+      "F/R in-face indicators missing",
+    );
+    check(
+      hints.every((hint) => hint.state === "rest" && hint.direction === "none" && hint.lit.length === 0),
+      "hints are not dim at rest",
+    );
+    check(
+      hints.every((hint) => hint.label?.includes("at rest")),
+      "at-rest hint labels are missing",
+    );
+  });
+
+  await attempt("single moves light the right hint group and chevrons", async () => {
+    const group = (hints, face) => hints.filter((hint) => hint.face === face);
+
+    await applyHintsMove(page, "U");
+    let hints = await readHints(page);
+    check(
+      group(hints, "U").every(
+        (hint) =>
+          hint.state === "quarter" &&
+          hint.direction === "left" &&
+          hint.lit.length === 1 &&
+          hint.lit[0] === "left",
+      ),
+      "U did not light one left chevron per top cell",
+    );
+    check(
+      group(hints, "U")[0]?.label === "U turn, quarter, left",
+      `unexpected U aria-label: ${group(hints, "U")[0]?.label}`,
+    );
+    check(
+      hints.filter((hint) => hint.face !== "U").every((hint) => hint.state === "rest"),
+      "U lit hints outside the top group",
+    );
+
+    await applyHintsMove(page, "U2");
+    hints = await readHints(page);
+    check(
+      group(hints, "U").every(
+        (hint) => hint.state === "half" && hint.direction === "both" && hint.lit.length === 2,
+      ),
+      "U2 did not light both chevrons",
+    );
+
+    await applyHintsMove(page, "L'");
+    hints = await readHints(page);
+    check(
+      group(hints, "L").every(
+        (hint) => hint.state === "quarter" && hint.direction === "up" && hint.lit[0] === "up",
+      ),
+      "L' did not light one upward chevron in the left group",
+    );
+
+    await applyHintsMove(page, "B");
+    hints = await readHints(page);
+    check(
+      group(hints, "B").every(
+        (hint) => hint.state === "quarter" && hint.direction === "up" && hint.lit[0] === "up",
+      ),
+      "B did not light the right group with an upward chevron",
+    );
+
+    await applyHintsMove(page, "F");
+    hints = await readHints(page);
+    check(
+      group(hints, "F")[0]?.state === "quarter" && group(hints, "F")[0]?.lit[0] === "right",
+      "F in-face indicator did not light right",
+    );
+
+    await applyHintsMove(page, "R");
+    hints = await readHints(page);
+    check(
+      group(hints, "R")[0]?.state === "quarter" && group(hints, "R")[0]?.lit[0] === "up",
+      "R in-face indicator did not light up",
+    );
+
+    await page.locator("#reset").click();
+    hints = await readHints(page);
+    check(
+      hints.every((hint) => hint.state === "rest" && hint.lit.length === 0),
+      "reset did not clear the hints",
+    );
+  });
+
+  await attempt("all 18 moves match the derived hint mapping", async () => {
+    const moveNames = [
+      "U", "U2", "U'", "R", "R2", "R'", "F", "F2", "F'",
+      "D", "D2", "D'", "L", "L2", "L'", "B", "B2", "B'",
+    ];
+    const quarterFacelets = new Map();
+    for (const token of moveNames) {
+      await applyHintsMove(page, token);
+      const face = faceOfToken(token);
+      const facelets = await page.evaluate(() => window.__cc.facelets());
+      if (!token.endsWith("2") && !token.endsWith("'")) {
+        quarterFacelets.set(face, facelets);
+      }
+      const expected = deriveHint(token, quarterFacelets.get(face));
+      const actual = (await readHints(page)).find((hint) => hint.face === face);
+      check(
+        actual?.state === expected.state && actual?.direction === expected.direction,
+        `${token}: hint is ${actual?.state}/${actual?.direction}, expected ${expected.state}/${expected.direction}`,
+      );
+      const litDirs = actual?.lit ?? [];
+      const expectedLit = expected.direction === "both" ? 2 : 1;
+      check(
+        litDirs.length === expectedLit &&
+          (expected.direction === "both" || litDirs[0] === expected.direction),
+        `${token}: lit chevrons ${litDirs.join(",")} do not match ${expected.direction}`,
+      );
+    }
+  });
+
   const dir = resolve("artifacts");
   await mkdir(dir, { recursive: true });
+  await page.locator("#reset").click();
+  await applyHintsMove(page, "L'");
+  await page.screenshot({ path: resolve(dir, "net-hints.png"), fullPage: true });
   await page.screenshot({ path: resolve(dir, "browser-pass.png"), fullPage: true });
 
   await attempt("keyboard turn applies exactly one move", async () => {

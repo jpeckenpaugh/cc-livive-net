@@ -3,6 +3,11 @@
 // sends that snapshot back with a move string and stores the new result. The
 // canvas renderer adds camera state, never move logic.
 import init, * as cube from "./pkg/color_cube_wasm.js";
+import {
+  deriveHints,
+  FACE_INDICATOR_FACES,
+  PERIMETER_FACES,
+} from "./hints.js";
 import { createRenderer } from "./renderer.js";
 
 const FACES = ["U", "R", "F", "D", "L", "B"];
@@ -41,6 +46,33 @@ let stickers = [];
 let renderer = null;
 let lastError = null;
 let netVisible = true;
+let hintMap = {};
+const hintCells = new Map();
+
+// Perimeter hint cells live in the four 3×3 bands around the cross. Each cell
+// spans the band's full depth so the 12 cells tile the bands exactly.
+const PERIMETER_LAYOUT = {
+  U: [
+    [1, 5, 2, 6],
+    [1, 6, 2, 7],
+    [1, 7, 2, 8],
+  ],
+  L: [
+    [5, 1, 6, 2],
+    [6, 1, 7, 2],
+    [7, 1, 8, 2],
+  ],
+  B: [
+    [5, 14, 6, 15],
+    [6, 14, 7, 15],
+    [7, 14, 8, 15],
+  ],
+  D: [
+    [11, 5, 12, 6],
+    [11, 6, 12, 7],
+    [11, 7, 12, 8],
+  ],
+};
 
 function setStatus(message, tone = "") {
   statusLine.textContent = message;
@@ -271,11 +303,61 @@ function setupTabs() {
   });
 }
 
+function buildHintCell(face, axis) {
+  const cell = document.createElement("div");
+  cell.className = `turn-hint hint-${face}`;
+  cell.dataset.hintCell = "perimeter";
+  cell.dataset.hintFace = face;
+  cell.dataset.axis = axis;
+  cell.dataset.state = "rest";
+  cell.dataset.direction = "none";
+  cell.setAttribute("role", "img");
+  cell.setAttribute("aria-label", `${face} turn hint, at rest`);
+
+  const [first, second] = axis === "horizontal" ? ["◀", "▶"] : ["▲", "▼"];
+  for (const [glyph, direction] of [
+    [first, axis === "horizontal" ? "left" : "up"],
+    [second, axis === "horizontal" ? "right" : "down"],
+  ]) {
+    const chevron = document.createElement("span");
+    chevron.className = "chev";
+    chevron.dataset.dir = direction;
+    chevron.setAttribute("aria-hidden", "true");
+    chevron.textContent = glyph;
+    cell.append(chevron);
+  }
+  return cell;
+}
+
+function buildNetHints(fragment) {
+  for (const face of PERIMETER_FACES) {
+    const cells = [];
+    PERIMETER_LAYOUT[face].forEach(([rowStart, colStart, rowEnd, colEnd]) => {
+      const cell = buildHintCell(face, face === "U" || face === "D" ? "horizontal" : "vertical");
+      cell.style.gridArea = `${rowStart} / ${colStart} / ${rowEnd} / ${colEnd}`;
+      cells.push(cell);
+      fragment.append(cell);
+    });
+    hintCells.set(face, cells);
+  }
+  return fragment;
+}
+
+function buildFaceIndicator(face, faceElement) {
+  const indicator = buildHintCell(face, face === "F" ? "horizontal" : "vertical");
+  indicator.dataset.hintCell = "face";
+  indicator.classList.add("face-hint");
+  faceElement.append(indicator);
+  hintCells.set(face, [indicator]);
+}
+
 function buildNet() {
   const fragment = document.createDocumentFragment();
   for (let face = 0; face < 6; face += 1) {
     const faceElement = document.createElement("div");
     faceElement.className = `face face-${FACES[face]}`;
+    faceElement.setAttribute("role", "group");
+    faceElement.setAttribute("aria-label", `${FACES[face]} face`);
     for (let offset = 0; offset < 9; offset += 1) {
       const sticker = document.createElement("div");
       sticker.className = "sticker";
@@ -285,9 +367,46 @@ function buildNet() {
       stickers.push(sticker);
       faceElement.append(sticker);
     }
+    if (FACE_INDICATOR_FACES.includes(FACES[face])) {
+      buildFaceIndicator(FACES[face], faceElement);
+    }
     fragment.append(faceElement);
   }
+  buildNetHints(fragment);
   net.replaceChildren(fragment);
+}
+
+function applyHint(cell, hint) {
+  const chevrons = cell.querySelectorAll(".chev");
+  if (!hint) {
+    cell.dataset.state = "rest";
+    cell.dataset.direction = "none";
+    cell.setAttribute("aria-label", `${cell.dataset.hintFace} turn hint, at rest`);
+    for (const chevron of chevrons) chevron.classList.remove("lit");
+    return;
+  }
+  cell.dataset.state = hint.state;
+  cell.dataset.direction = hint.direction;
+  const label =
+    hint.state === "half"
+      ? `${hint.face} turn, half, both directions`
+      : `${hint.face} turn, quarter, ${hint.direction}`;
+  cell.setAttribute("aria-label", label);
+  for (const chevron of chevrons) {
+    const lit = hint.direction === "both" || chevron.dataset.dir === hint.direction;
+    chevron.classList.toggle("lit", lit);
+  }
+}
+
+// The last token in history is the single source of truth for the hint; reset
+// empties history, so the hints clear without a separate code path.
+function updateHints() {
+  const token = state.history.at(-1);
+  const hint = token === undefined ? undefined : hintMap[token];
+  for (const [face, cells] of hintCells.entries()) {
+    const cellHint = hint && hint.face === face ? hint : undefined;
+    for (const cell of cells) applyHint(cell, cellHint);
+  }
 }
 
 function render() {
@@ -322,6 +441,7 @@ function updateInspector() {
 
 function refresh() {
   render();
+  updateHints();
   moveCount.textContent = String(state.history.length);
   solutionLength.textContent = state.solution.length > 0 ? String(state.solution.length) : "—";
   playButton.disabled = state.playing || state.solution.length === 0;
@@ -559,6 +679,12 @@ async function main() {
     buildStructureCards();
     setupTabs();
     moveNames = Array.from(cube.move_names());
+    // Derive each hint once from the real wasm move effect on SOLVED, so the
+    // arrows follow the facelet permutation rather than a hand-written table.
+    const solved = Uint8Array.from(cube.solved_facelets());
+    hintMap = deriveHints(moveNames, (token) =>
+      Uint8Array.from(cube.apply_facelets(solved, token)),
+    );
     buildMoveButtons();
     wireEvents();
     setNetVisible(true);

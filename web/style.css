@@ -170,19 +170,20 @@ main {
   display: none !important;
 }
 
-/* 12 × 9 unfolded net */
+/* 14 × 11 unfolded net: 3×3 face blocks with one 3-cell hint row/column per edge */
 .net {
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  grid-template-rows: repeat(9, 1fr);
-  gap: 3px;
-  aspect-ratio: 12 / 9;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  grid-template-rows: repeat(11, minmax(0, 1fr));
+  gap: 2px;
+  aspect-ratio: 14 / 11;
   max-height: min(70vh, 560px);
   margin: 0 auto;
   user-select: none;
 }
 
 .face {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
@@ -192,12 +193,81 @@ main {
   background: #070a0e;
 }
 
-.face-U { grid-area: 1 / 4 / 4 / 7; }
-.face-L { grid-area: 4 / 1 / 7 / 4; }
-.face-F { grid-area: 4 / 4 / 7 / 7; }
-.face-R { grid-area: 4 / 7 / 7 / 10; }
-.face-B { grid-area: 4 / 10 / 7 / 13; }
-.face-D { grid-area: 7 / 4 / 10 / 7; }
+.face-U { grid-area: 2 / 5 / 5 / 8; }
+.face-L { grid-area: 5 / 2 / 8 / 5; }
+.face-F { grid-area: 5 / 5 / 8 / 8; }
+.face-R { grid-area: 5 / 8 / 8 / 11; }
+.face-B { grid-area: 5 / 11 / 8 / 14; }
+.face-D { grid-area: 8 / 5 / 11 / 8; }
+
+/* Turn hints: per cell, two opposed chevrons along the band tangent. Both are
+   dim at rest; a quarter turn lights one and a half turn lights both. */
+.turn-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.18em;
+  min-width: 0;
+  border-radius: 7px;
+  border: 1px solid #1d2836;
+  background: #0b1118;
+  color: #3b4a5d;
+  font-size: clamp(0.5rem, 1.5vw, 0.88rem);
+  line-height: 1;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.turn-hint[data-axis="vertical"] {
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.turn-hint[data-state="quarter"],
+.turn-hint[data-state="half"] {
+  border-color: #43536a;
+  background: #101923;
+}
+
+.turn-hint .chev {
+  opacity: 0.55;
+  transition:
+    color 120ms ease,
+    opacity 120ms ease,
+    text-shadow 120ms ease;
+}
+
+.turn-hint .chev.lit {
+  color: #fff;
+  opacity: 1;
+  text-shadow: 0 0 6px rgb(255 255 255 / 0.6);
+}
+
+/* F and R are interior, so their hint is a small unobtrusive in-face overlay. */
+.face-hint {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: rgb(7 10 14 / 0.62);
+  border-color: rgb(255 255 255 / 0.18);
+  font-size: clamp(0.42rem, 1.1vw, 0.68rem);
+  pointer-events: none;
+}
+
+.face-hint .chev {
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-hint,
+  .turn-hint .chev {
+    transition: none;
+  }
+}
 
 .sticker {
   border-radius: 5px;
