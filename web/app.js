@@ -40,7 +40,7 @@ let moveNames = [];
 let stickers = [];
 let renderer = null;
 let lastError = null;
-let netVisible = false;
+let netVisible = true;
 
 function setStatus(message, tone = "") {
   statusLine.textContent = message;
@@ -470,12 +470,10 @@ async function runConformance() {
 
 function setNetVisible(show) {
   netVisible = show;
+  // The canvas is always shown; the net is an additional view, not a mode.
   net.hidden = !show;
-  if (renderer) {
-    canvas.hidden = show;
-  }
   viewToggle.setAttribute("aria-pressed", String(show));
-  viewToggle.textContent = show ? "Show cube" : "Show net";
+  viewToggle.textContent = show ? "Hide net" : "Show net";
 }
 
 function wireEvents() {
@@ -563,7 +561,7 @@ async function main() {
     moveNames = Array.from(cube.move_names());
     buildMoveButtons();
     wireEvents();
-    setNetVisible(false);
+    setNetVisible(true);
     reset();
     installTestHook();
   } catch (error) {

@@ -215,12 +215,15 @@ async function run() {
     check((await page.evaluate(() => window.__cc.lastError())) === null, "app recorded an error");
   });
 
-  await attempt("net toggle swaps the accessible fallback", async () => {
+  await attempt("cube and net are shown together; the toggle only hides the net", async () => {
+    check(await page.locator("#cube").isVisible(), "canvas is not visible by default");
+    check(await page.locator("#net").isVisible(), "net is not visible by default");
     await page.locator("#view-toggle").click();
-    check(await page.locator("#net").isVisible(), "net is not visible after toggle");
-    check(await page.locator("#cube").isHidden(), "canvas still visible with net shown");
+    check(await page.locator("#net").isHidden(), "net still visible after hiding");
+    check(await page.locator("#cube").isVisible(), "canvas disappeared with the net");
     await page.locator("#view-toggle").click();
-    check(await page.locator("#cube").isVisible(), "canvas did not come back");
+    check(await page.locator("#net").isVisible(), "net did not come back");
+    check(await page.locator("#cube").isVisible(), "canvas disappeared with the net");
   });
 
   const dir = resolve("artifacts");

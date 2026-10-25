@@ -46,16 +46,16 @@
             tabindex="0"
             aria-label="Isometric cube. Drag to rotate, scroll to zoom, double-click to reset the view."
           >
-            Isometric cube view. Use “Show net” for a flat, text-labelled layout.
+            Isometric cube view. The unfolded net is shown below.
           </canvas>
         </div>
         <div class="view-row">
-          <button id="view-toggle" type="button" aria-pressed="false" aria-controls="net">
-            Show net
+          <button id="view-toggle" type="button" aria-pressed="true" aria-controls="net">
+            Hide net
           </button>
           <span class="hint view-hint">drag to rotate · scroll to zoom · double-click to reset</span>
         </div>
-        <div id="net" class="net" role="img" aria-label="Unfolded cube net" hidden></div>
+        <div id="net" class="net" role="img" aria-label="Unfolded cube net"></div>
         <p id="status" class="status" aria-live="polite">loading wasm…</p>
       </section>
 
