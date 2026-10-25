@@ -49,26 +49,10 @@ const hintCells = new Map();
 // Perimeter hint cells live in the four 3×3 bands around the cross. Each cell
 // spans the band's full depth so the 12 cells tile the bands exactly.
 const PERIMETER_LAYOUT = {
-  U: [
-    [1, 5, 2, 6],
-    [1, 6, 2, 7],
-    [1, 7, 2, 8],
-  ],
-  L: [
-    [5, 1, 6, 2],
-    [6, 1, 7, 2],
-    [7, 1, 8, 2],
-  ],
-  B: [
-    [5, 14, 6, 15],
-    [6, 14, 7, 15],
-    [7, 14, 8, 15],
-  ],
-  D: [
-    [11, 5, 12, 6],
-    [11, 6, 12, 7],
-    [11, 7, 12, 8],
-  ],
+  U: [1, 5, 2, 8],
+  L: [5, 1, 8, 2],
+  B: [5, 14, 8, 15],
+  D: [11, 5, 12, 8],
 };
 
 function setStatus(message, tone = "") {
@@ -301,52 +285,69 @@ function setupTabs() {
 }
 
 function buildHintCell(face, hint) {
-  const cell = document.createElement("div");
-  cell.className = `turn-hint hint-${face}`;
-  cell.dataset.hintCell = "perimeter";
-  cell.dataset.hintFace = face;
-  cell.dataset.axis = hint.axis;
-  cell.dataset.state = "rest";
-  cell.setAttribute("role", "img");
-  cell.setAttribute("aria-label", `${face} turn hint, at rest`);
+  const group = document.createElement("div");
+  group.className = `turn-hint hint-${face}`;
+  group.dataset.hintCell = "perimeter";
+  group.dataset.hintFace = face;
+  group.dataset.axis = hint.axis;
+  group.dataset.state = "rest";
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-label", `${face} turn controls`);
 
-  // One outward arrow at rest. A half turn reveals the opposed arrow, so the
-  // pair means "180°", not "faster".
-  const outward = document.createElement("span");
-  outward.className = "chev";
-  outward.setAttribute("aria-hidden", "true");
-  outward.textContent = hint.glyph;
-  cell.append(outward);
+  // Two buttons, each with a single outward arrow: the first is the quarter
+  // turn, the second is the half turn (marked with 2).
+  for (const [token, power] of [[face, "1"], [`${face}2`, "2"]]) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "hint-move";
+    button.dataset.token = token;
+    button.dataset.power = power;
+    button.setAttribute("aria-label", `${face} ${power === "1" ? "quarter" : "half"} turn`);
+    const arrow = document.createElement("span");
+    arrow.className = "chev";
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.textContent = hint.glyph;
+    button.append(arrow);
+    if (power === "2") {
+      const badge = document.createElement("span");
+      badge.className = "mult";
+      badge.textContent = "2";
+      badge.setAttribute("aria-hidden", "true");
+      button.append(badge);
+    }
+    button.addEventListener("click", () => applyHintMove(token));
+    group.append(button);
+  }
+  return group;
+}
 
-  const opposed = document.createElement("span");
-  opposed.className = "chev opposite";
-  opposed.setAttribute("aria-hidden", "true");
-  opposed.textContent = hint.opposite;
-  opposed.hidden = true;
-  cell.append(opposed);
-  return cell;
+function applyHintMove(token) {
+  if (state.playing) return;
+  try {
+    applyToken(token);
+    state.solution = [];
+    solverTime.textContent = "—";
+    refresh();
+    setStatus(`applied ${token}`);
+  } catch (error) {
+    fail(error);
+  }
 }
 
 function deriveHintForFace(face) {
   return {
     axis: face === "U" || face === "D" ? "row" : "column",
     glyph: { U: "\u25B2", D: "\u25BC", L: "\u25C0", B: "\u25B6" }[face],
-    opposite: { U: "\u25BC", D: "\u25B2", L: "\u25B6", B: "\u25C0" }[face],
   };
 }
 
 function buildNetHints(fragment) {
   for (const face of PERIMETER_FACES) {
-    const cells = [];
-    const hint = deriveHintForFace(face);
-    PERIMETER_LAYOUT[face].forEach(([rowStart, colStart, rowEnd, colEnd], slot) => {
-      const cell = buildHintCell(face, hint);
-      cell.dataset.hintSlot = String(slot);
-      cell.style.gridArea = `${rowStart} / ${colStart} / ${rowEnd} / ${colEnd}`;
-      cells.push(cell);
-      fragment.append(cell);
-    });
-    hintCells.set(face, cells);
+    const [rowStart, colStart, rowEnd, colEnd] = PERIMETER_LAYOUT[face];
+    const cell = buildHintCell(face, deriveHintForFace(face));
+    cell.style.gridArea = `${rowStart} / ${colStart} / ${rowEnd} / ${colEnd}`;
+    hintCells.set(face, [cell]);
+    fragment.append(cell);
   }
   return fragment;
 }
@@ -374,21 +375,16 @@ function buildNet() {
 }
 
 function applyHint(cell, hint) {
-  const [outward, opposed] = cell.querySelectorAll(".chev");
-  if (!hint) {
-    cell.dataset.state = "rest";
-    cell.setAttribute("aria-label", `${cell.dataset.hintFace} turn hint, at rest`);
-    outward.classList.remove("lit");
-    opposed.hidden = true;
-    opposed.classList.remove("lit");
-    return;
-  }
-  const half = hint.state === "half";
-  cell.dataset.state = hint.state;
-  cell.setAttribute("aria-label", `${hint.face} turn, ${half ? "half" : "quarter"}`);
-  outward.classList.add("lit");
-  opposed.hidden = !half;
-  opposed.classList.toggle("lit", half);
+  const buttons = cell.querySelectorAll(".hint-move");
+  const half = hint?.state === "half";
+  cell.dataset.state = hint ? hint.state : "rest";
+  cell.setAttribute(
+    "aria-label",
+    `${cell.dataset.hintFace} turn controls, ${hint ? (half ? "half" : "quarter") : "at rest"}`,
+  );
+  buttons.forEach((button) => {
+    button.classList.toggle("lit", hint !== undefined && button.dataset.power === (half ? "2" : "1"));
+  });
 }
 
 // The last token in history is the single source of truth for the hint; reset
@@ -398,9 +394,7 @@ function updateHints() {
   const hint = token === undefined ? undefined : hintMap[token];
   for (const [face, cells] of hintCells.entries()) {
     const cellHint = hint && hint.face === face ? hint : undefined;
-    // The three cells are one indicator strip; only the centre marks the
-    // active row/column, so all three no longer light in unison.
-    cells.forEach((cell, index) => applyHint(cell, index === 1 ? cellHint : undefined));
+    for (const cell of cells) applyHint(cell, cellHint);
   }
 }
 
