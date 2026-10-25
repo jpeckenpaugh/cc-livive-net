@@ -9,7 +9,6 @@
 import { createRequire } from "node:module";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { deriveHint, faceOfToken } from "../hints.js";
 
 const require = createRequire(process.env.PLAYWRIGHT_PACKAGE ?? "/opt/browser/package.json");
 const { chromium } = require("playwright");
@@ -78,7 +77,7 @@ async function readHints(page) {
   return page.evaluate(() =>
     [...document.querySelectorAll("[data-hint-cell]")].map((cell) => ({
       cell: cell.dataset.hintCell,
-      face: cell.dataset.hintFace,
+      token: cell.dataset.hintToken,
       power: Number(cell.dataset.power),
       state: cell.dataset.state,
       lit: cell.querySelectorAll(".chev.lit").length,
@@ -249,19 +248,17 @@ async function run() {
     check(await page.locator("#cube").isVisible(), "canvas disappeared with the net");
   });
 
-  await attempt("hint cells match the 15x12 layout and amplitudes", async () => {
+  await attempt("all 18 moves have exactly one hint cell", async () => {
     await page.locator("#reset").click();
     const hints = await readHints(page);
+    const expected = [
+      "U", "U2", "U'", "R", "R2", "R'", "F", "F2", "F'",
+      "D", "D2", "D'", "L", "L2", "L'", "B", "B2", "B'",
+    ];
     check(hints.length === 18, `expected 18 hint cells, got ${hints.length}`);
-    const count = (face, power) =>
-      hints.filter((hint) => hint.face === face && hint.power === power).length;
-    check(count("U", 2) === 3 && count("U", 1) === 3, "U needs 3 double and 3 single cells");
-    check(count("D", 1) === 3 && count("D", 2) === 0, "D needs 3 single cells only");
-    check(count("L", 1) === 3 && count("L", 2) === 0, "L needs 3 single cells only");
-    check(count("B", 1) === 3 && count("B", 2) === 3, "B needs 3 single and 3 double cells");
     check(
-      hints.every((hint) => hint.state === "rest" && hint.lit === 0),
-      "hints are not dim at rest",
+      [...hints.map((hint) => hint.token)].sort().join(" ") === [...expected].sort().join(" "),
+      `unexpected hint tokens: ${hints.map((hint) => hint.token).join(" ")}`,
     );
     check(
       hints.every((hint) => hint.glyphs.length === hint.power),
@@ -271,103 +268,51 @@ async function run() {
       hints.every((hint) => new Set(hint.glyphs).size === 1),
       "chevrons in a cell must share one outward direction",
     );
-    const expectedGlyph = { U: "\u25B2", D: "\u25BC", L: "\u25C0", B: "\u25B6" };
-    for (const [face, glyph] of Object.entries(expectedGlyph)) {
-      const cells = hints.filter((hint) => hint.face === face);
-      check(cells.every((hint) => hint.glyphs.every((g) => g === glyph)), `${face} arrows do not point outward`);
-    }
-  });
-
-  await attempt("hint cells apply quarter and double turns", async () => {
-    await page.locator("#reset").click();
-    const before = await page.evaluate(() => ({
-      count: window.__cc.moveCount(),
-      facelets: window.__cc.facelets(),
-    }));
-
-    await page.locator('.hint-U[data-power="1"]').first().click();
-    await page.waitForFunction((count) => window.__cc.moveCount() === count + 1, before.count);
-    const afterQuarter = await page.evaluate(() => window.__cc.facelets());
-    check(
-      JSON.stringify(afterQuarter) !== JSON.stringify(before.facelets),
-      "clicking a single-arrow cell did not turn the cube",
-    );
-    let hints = await readHints(page);
-    check(
-      hints.filter((hint) => hint.face === "U" && hint.power === 1).every((hint) => hint.state === "active"),
-      "U did not light the three single cells",
-    );
-    check(
-      hints.filter((hint) => !(hint.face === "U" && hint.power === 1)).every((hint) => hint.state === "rest"),
-      "U lit cells outside the single row",
-    );
-
-    await page.locator('.hint-U[data-power="2"]').first().click();
-    await page.waitForFunction((count) => window.__cc.moveCount() === count + 2, before.count);
-    hints = await readHints(page);
-    check(
-      hints.filter((hint) => hint.face === "U" && hint.power === 2).every((hint) => hint.state === "active"),
-      "U2 did not light the three double cells",
-    );
-    check(
-      hints.filter((hint) => hint.face === "U" && hint.power === 1).every((hint) => hint.state === "rest"),
-      "U2 left the single row lit",
-    );
-
-    await page.locator('.hint-B[data-power="2"]').first().click();
-    hints = await readHints(page);
-    check(
-      hints.filter((hint) => hint.face === "B" && hint.power === 2).every((hint) => hint.state === "active"),
-      "B2 did not light the outer column",
-    );
-    check(
-      hints.filter((hint) => hint.face === "B" && hint.power === 1).every((hint) => hint.state === "rest"),
-      "B2 left the inner column lit",
-    );
-
-    await page.locator('.hint-L[data-power="1"]').first().click();
-    hints = await readHints(page);
-    check(
-      hints.filter((hint) => hint.face === "L").every((hint) => hint.state === "active"),
-      "L did not light its three cells",
-    );
-
-    await page.locator("#reset").click();
-    hints = await readHints(page);
     check(
       hints.every((hint) => hint.state === "rest" && hint.lit === 0),
-      "reset did not clear the hints",
+      "hints are not dim at rest",
     );
   });
 
-  await attempt("all 18 moves match the derived hint mapping", async () => {
-    const moveNames = [
-      "U", "U2", "U'", "R", "R2", "R'", "F", "F2", "F'",
-      "D", "D2", "D'", "L", "L2", "L'", "B", "B2", "B'",
-    ];
-    for (const token of moveNames) {
+  await attempt("only the cell for the last move lights", async () => {
+    await page.locator("#reset").click();
+    for (const token of ["U", "U'", "U2", "L", "R'", "B", "B2", "F", "D'"]) {
       await applyHintsMove(page, token);
-      const expected = deriveHint(token);
       const hints = await readHints(page);
-      if (expected === null) {
-        check(hints.every((hint) => hint.state === "rest" && hint.lit === 0), `${token} must not light a hint`);
-        continue;
-      }
-      const active = hints.filter(
-        (hint) => hint.face === expected.face && hint.power === expected.power,
-      );
-      check(active.length === 3, `${token}: expected three active cells`);
+      const active = hints.filter((hint) => hint.state === "active");
       check(
-        active.every((hint) => hint.state === "active" && hint.lit === expected.power),
-        `${token}: cells are not active with ${expected.power} lit chevron(s)`,
+        active.length === 1 && active[0].token === token,
+        `${token} lit ${active.map((hint) => hint.token).join(",") || "nothing"}`,
       );
       check(
-        hints
-          .filter((hint) => !(hint.face === expected.face && hint.power === expected.power))
-          .every((hint) => hint.state === "rest"),
-        `${token}: lit cells outside the expected row/column`,
+        active[0]?.lit === (token.endsWith("2") ? 2 : 1),
+        `${token} lit the wrong number of chevrons`,
       );
     }
+    await page.locator("#reset").click();
+    const rest = await readHints(page);
+    check(rest.every((hint) => hint.state === "rest"), "reset did not clear the hints");
+  });
+
+  await attempt("hint cells apply their own move", async () => {
+    await page.locator("#reset").click();
+    const before = await page.evaluate(() => window.__cc.moveCount());
+    await page.locator('.turn-hint[data-hint-token="U\'"]').click();
+    await page.waitForFunction((count) => window.__cc.moveCount() === count + 1, before);
+    let hints = await readHints(page);
+    let active = hints.filter((hint) => hint.state === "active");
+    check(active.length === 1 && active[0].token === "U'", "U' cell did not apply U'");
+
+    await page.locator('.turn-hint[data-hint-token="L2"]').click();
+    await page.waitForFunction((count) => window.__cc.moveCount() === count + 2, before);
+    hints = await readHints(page);
+    active = hints.filter((hint) => hint.state === "active");
+    check(active.length === 1 && active[0].token === "L2", "L2 cell did not apply L2");
+
+    await page.locator('.turn-hint[data-hint-token="B"]').click();
+    hints = await readHints(page);
+    active = hints.filter((hint) => hint.state === "active");
+    check(active.length === 1 && active[0].token === "B", "B cell did not apply B");
   });
 
   const dir = resolve("artifacts");
