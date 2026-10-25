@@ -291,11 +291,11 @@ function buildHintCell(entry) {
     "aria-label",
     `${entry.token} turn (${entry.power === 1 ? "quarter" : "half"})`,
   );
-  for (let i = 0; i < entry.power; i += 1) {
+  for (const glyph of entry.glyphs) {
     const chevron = document.createElement("span");
     chevron.className = "chev";
     chevron.setAttribute("aria-hidden", "true");
-    chevron.textContent = entry.glyph;
+    chevron.textContent = glyph;
     button.append(chevron);
   }
   button.addEventListener("click", () => applyHintMove(entry.token));

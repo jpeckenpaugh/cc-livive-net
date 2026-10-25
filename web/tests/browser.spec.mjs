@@ -264,10 +264,20 @@ async function run() {
       hints.every((hint) => hint.glyphs.length === hint.power),
       "a cell must hold one chevron per power",
     );
-    check(
-      hints.every((hint) => new Set(hint.glyphs).size === 1),
-      "chevrons in a cell must share one outward direction",
-    );
+    const expectedGlyphs = {
+      U: ["\u25C0"], "U'": ["\u25B6"], U2: ["\u25C0", "\u25B6"],
+      D: ["\u25B6"], "D'": ["\u25C0"], D2: ["\u25C0", "\u25B6"],
+      L: ["\u25BC"], "L'": ["\u25B2"], L2: ["\u25BC", "\u25B2"],
+      R: ["\u25B2"], "R'": ["\u25BC"], R2: ["\u25B2", "\u25BC"],
+      F: ["\u21BB"], "F'": ["\u21BA"], F2: ["\u21BB", "\u21BA"],
+      B: ["\u21BA"], "B'": ["\u21BB"], B2: ["\u21BA", "\u21BB"],
+    };
+    for (const hint of hints) {
+      check(
+        hint.glyphs.join("") === expectedGlyphs[hint.token].join(""),
+        `${hint.token} arrows are ${hint.glyphs.join("")}, expected ${expectedGlyphs[hint.token].join("")}`,
+      );
+    }
     check(
       hints.every((hint) => hint.state === "rest" && hint.lit === 0),
       "hints are not dim at rest",
