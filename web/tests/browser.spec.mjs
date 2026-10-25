@@ -81,8 +81,8 @@ async function readHints(page) {
       face: cell.dataset.hintFace,
       axis: cell.dataset.axis,
       state: cell.dataset.state,
-      direction: cell.dataset.direction,
-      lit: [...cell.querySelectorAll(".chev.lit")].map((chevron) => chevron.dataset.dir),
+      lit: cell.querySelectorAll(".chev.lit").length,
+      glyphs: [...cell.querySelectorAll(".chev")].map((chevron) => chevron.textContent),
       label: cell.getAttribute("aria-label"),
       classes: [...cell.classList],
     })),
@@ -249,52 +249,48 @@ async function run() {
     check(await page.locator("#cube").isVisible(), "canvas disappeared with the net");
   });
 
-  await attempt("net has 12 perimeter hint cells and F/R in-face indicators", async () => {
+  await attempt("net has 12 outward hint cells and no F/R overlays", async () => {
     await page.locator("#reset").click();
     const hints = await readHints(page);
-    const perimeter = hints.filter((hint) => hint.cell === "perimeter");
-    check(perimeter.length === 12, `expected 12 perimeter hints, got ${perimeter.length}`);
+    check(hints.length === 12, `expected 12 hint cells, got ${hints.length}`);
     for (const face of ["U", "D", "L", "B"]) {
-      const cells = perimeter.filter((hint) => hint.face === face);
+      const cells = hints.filter((hint) => hint.face === face);
       check(cells.length === 3, `${face} edge has ${cells.length} hint cells`);
       check(
         cells.every((hint) => hint.classes.includes(`hint-${face}`)),
         `${face} hint cells lack the hint-${face} class`,
       );
     }
-    const faceHints = hints.filter((hint) => hint.cell === "face");
     check(
-      faceHints.length === 2 &&
-        faceHints.every((hint) => ["F", "R"].includes(hint.face) && hint.classes.includes("face-hint")),
-      "F/R in-face indicators missing",
-    );
-    check(
-      hints.every((hint) => hint.state === "rest" && hint.direction === "none" && hint.lit.length === 0),
+      hints.every((hint) => hint.state === "rest" && hint.lit === 0),
       "hints are not dim at rest",
     );
     check(
       hints.every((hint) => hint.label?.includes("at rest")),
       "at-rest hint labels are missing",
     );
+    check(
+      hints.every((hint) => hint.glyphs.length === 2 && hint.glyphs[0] === hint.glyphs[1]),
+      "the two chevrons in a cell must share one outward orientation",
+    );
+    const expectedGlyph = { U: "\u25B2", D: "\u25BC", L: "\u25C0", B: "\u25B6" };
+    for (const [face, glyph] of Object.entries(expectedGlyph)) {
+      const cells = hints.filter((hint) => hint.face === face);
+      check(cells.every((hint) => hint.glyphs.every((g) => g === glyph)), `${face} arrows do not point outward`);
+    }
   });
 
-  await attempt("single moves light the right hint group and chevrons", async () => {
+  await attempt("single moves light the right group and arrow count", async () => {
     const group = (hints, face) => hints.filter((hint) => hint.face === face);
 
     await applyHintsMove(page, "U");
     let hints = await readHints(page);
     check(
-      group(hints, "U").every(
-        (hint) =>
-          hint.state === "quarter" &&
-          hint.direction === "left" &&
-          hint.lit.length === 1 &&
-          hint.lit[0] === "left",
-      ),
-      "U did not light one left chevron per top cell",
+      group(hints, "U").every((hint) => hint.state === "quarter" && hint.lit === 1),
+      "U did not light exactly one chevron per top cell",
     );
     check(
-      group(hints, "U")[0]?.label === "U turn, quarter, left",
+      group(hints, "U")[0]?.label === "U turn, quarter",
       `unexpected U aria-label: ${group(hints, "U")[0]?.label}`,
     );
     check(
@@ -305,48 +301,41 @@ async function run() {
     await applyHintsMove(page, "U2");
     hints = await readHints(page);
     check(
-      group(hints, "U").every(
-        (hint) => hint.state === "half" && hint.direction === "both" && hint.lit.length === 2,
-      ),
+      group(hints, "U").every((hint) => hint.state === "half" && hint.lit === 2),
       "U2 did not light both chevrons",
     );
 
-    await applyHintsMove(page, "L'");
+    await applyHintsMove(page, "U'");
     hints = await readHints(page);
     check(
-      group(hints, "L").every(
-        (hint) => hint.state === "quarter" && hint.direction === "up" && hint.lit[0] === "up",
-      ),
-      "L' did not light one upward chevron in the left group",
+      group(hints, "U").every((hint) => hint.state === "quarter" && hint.lit === 1),
+      "U' did not light one chevron",
     );
 
-    await applyHintsMove(page, "B");
+    await applyHintsMove(page, "L");
     hints = await readHints(page);
     check(
-      group(hints, "B").every(
-        (hint) => hint.state === "quarter" && hint.direction === "up" && hint.lit[0] === "up",
-      ),
-      "B did not light the right group with an upward chevron",
+      group(hints, "L").every((hint) => hint.state === "quarter" && hint.lit === 1),
+      "L did not light the left group",
     );
 
-    await applyHintsMove(page, "F");
+    await applyHintsMove(page, "B2");
     hints = await readHints(page);
     check(
-      group(hints, "F")[0]?.state === "quarter" && group(hints, "F")[0]?.lit[0] === "right",
-      "F in-face indicator did not light right",
+      group(hints, "B").every((hint) => hint.state === "half" && hint.lit === 2),
+      "B2 did not light both chevrons in the right group",
     );
 
-    await applyHintsMove(page, "R");
-    hints = await readHints(page);
-    check(
-      group(hints, "R")[0]?.state === "quarter" && group(hints, "R")[0]?.lit[0] === "up",
-      "R in-face indicator did not light up",
-    );
+    for (const token of ["F", "R'"]) {
+      await applyHintsMove(page, token);
+      hints = await readHints(page);
+      check(hints.every((hint) => hint.state === "rest" && hint.lit === 0), `${token} lit a hint`);
+    }
 
     await page.locator("#reset").click();
     hints = await readHints(page);
     check(
-      hints.every((hint) => hint.state === "rest" && hint.lit.length === 0),
+      hints.every((hint) => hint.state === "rest" && hint.lit === 0),
       "reset did not clear the hints",
     );
   });
@@ -356,26 +345,26 @@ async function run() {
       "U", "U2", "U'", "R", "R2", "R'", "F", "F2", "F'",
       "D", "D2", "D'", "L", "L2", "L'", "B", "B2", "B'",
     ];
-    const quarterFacelets = new Map();
     for (const token of moveNames) {
       await applyHintsMove(page, token);
-      const face = faceOfToken(token);
-      const facelets = await page.evaluate(() => window.__cc.facelets());
-      if (!token.endsWith("2") && !token.endsWith("'")) {
-        quarterFacelets.set(face, facelets);
+      const expected = deriveHint(token);
+      const hints = await readHints(page);
+      if (expected === null) {
+        check(hints.every((hint) => hint.state === "rest" && hint.lit === 0), `${token} must not light a hint`);
+        continue;
       }
-      const expected = deriveHint(token, quarterFacelets.get(face));
-      const actual = (await readHints(page)).find((hint) => hint.face === face);
+      const actual = hints.filter((hint) => hint.face === expected.face);
+      check(actual.length === 3, `${token}: wrong number of hint cells`);
+      const lit = expected.state === "half" ? 2 : 1;
       check(
-        actual?.state === expected.state && actual?.direction === expected.direction,
-        `${token}: hint is ${actual?.state}/${actual?.direction}, expected ${expected.state}/${expected.direction}`,
+        actual.every((hint) => hint.state === expected.state && hint.lit === lit),
+        `${token}: hint is not ${expected.state} with ${lit} chevron(s)`,
       );
-      const litDirs = actual?.lit ?? [];
-      const expectedLit = expected.direction === "both" ? 2 : 1;
       check(
-        litDirs.length === expectedLit &&
-          (expected.direction === "both" || litDirs[0] === expected.direction),
-        `${token}: lit chevrons ${litDirs.join(",")} do not match ${expected.direction}`,
+        hints
+          .filter((hint) => hint.face !== expected.face)
+          .every((hint) => hint.state === "rest"),
+        `${token}: lit hints outside ${expected.face}`,
       );
     }
   });

@@ -3,11 +3,7 @@
 // sends that snapshot back with a move string and stores the new result. The
 // canvas renderer adds camera state, never move logic.
 import init, * as cube from "./pkg/color_cube_wasm.js";
-import {
-  deriveHints,
-  FACE_INDICATOR_FACES,
-  PERIMETER_FACES,
-} from "./hints.js";
+import { deriveHints, PERIMETER_FACES } from "./hints.js";
 import { createRenderer } from "./renderer.js";
 
 const FACES = ["U", "R", "F", "D", "L", "B"];
@@ -303,37 +299,40 @@ function setupTabs() {
   });
 }
 
-function buildHintCell(face, axis) {
+function buildHintCell(face, hint) {
   const cell = document.createElement("div");
   cell.className = `turn-hint hint-${face}`;
   cell.dataset.hintCell = "perimeter";
   cell.dataset.hintFace = face;
-  cell.dataset.axis = axis;
+  cell.dataset.axis = hint.axis;
   cell.dataset.state = "rest";
-  cell.dataset.direction = "none";
   cell.setAttribute("role", "img");
   cell.setAttribute("aria-label", `${face} turn hint, at rest`);
 
-  const [first, second] = axis === "horizontal" ? ["◀", "▶"] : ["▲", "▼"];
-  for (const [glyph, direction] of [
-    [first, axis === "horizontal" ? "left" : "up"],
-    [second, axis === "horizontal" ? "right" : "down"],
-  ]) {
+  // Both chevrons point the same way, outward from the centre of the net.
+  for (let i = 0; i < 2; i += 1) {
     const chevron = document.createElement("span");
     chevron.className = "chev";
-    chevron.dataset.dir = direction;
     chevron.setAttribute("aria-hidden", "true");
-    chevron.textContent = glyph;
+    chevron.textContent = hint.glyph;
     cell.append(chevron);
   }
   return cell;
 }
 
+function deriveHintForFace(face) {
+  return {
+    axis: face === "U" || face === "D" ? "row" : "column",
+    glyph: { U: "\u25B2", D: "\u25BC", L: "\u25C0", B: "\u25B6" }[face],
+  };
+}
+
 function buildNetHints(fragment) {
   for (const face of PERIMETER_FACES) {
     const cells = [];
+    const hint = deriveHintForFace(face);
     PERIMETER_LAYOUT[face].forEach(([rowStart, colStart, rowEnd, colEnd]) => {
-      const cell = buildHintCell(face, face === "U" || face === "D" ? "horizontal" : "vertical");
+      const cell = buildHintCell(face, hint);
       cell.style.gridArea = `${rowStart} / ${colStart} / ${rowEnd} / ${colEnd}`;
       cells.push(cell);
       fragment.append(cell);
@@ -341,14 +340,6 @@ function buildNetHints(fragment) {
     hintCells.set(face, cells);
   }
   return fragment;
-}
-
-function buildFaceIndicator(face, faceElement) {
-  const indicator = buildHintCell(face, face === "F" ? "horizontal" : "vertical");
-  indicator.dataset.hintCell = "face";
-  indicator.classList.add("face-hint");
-  faceElement.append(indicator);
-  hintCells.set(face, [indicator]);
 }
 
 function buildNet() {
@@ -367,9 +358,6 @@ function buildNet() {
       stickers.push(sticker);
       faceElement.append(sticker);
     }
-    if (FACE_INDICATOR_FACES.includes(FACES[face])) {
-      buildFaceIndicator(FACES[face], faceElement);
-    }
     fragment.append(faceElement);
   }
   buildNetHints(fragment);
@@ -380,22 +368,17 @@ function applyHint(cell, hint) {
   const chevrons = cell.querySelectorAll(".chev");
   if (!hint) {
     cell.dataset.state = "rest";
-    cell.dataset.direction = "none";
     cell.setAttribute("aria-label", `${cell.dataset.hintFace} turn hint, at rest`);
     for (const chevron of chevrons) chevron.classList.remove("lit");
     return;
   }
+  const litCount = hint.state === "half" ? 2 : 1;
   cell.dataset.state = hint.state;
-  cell.dataset.direction = hint.direction;
-  const label =
-    hint.state === "half"
-      ? `${hint.face} turn, half, both directions`
-      : `${hint.face} turn, quarter, ${hint.direction}`;
-  cell.setAttribute("aria-label", label);
-  for (const chevron of chevrons) {
-    const lit = hint.direction === "both" || chevron.dataset.dir === hint.direction;
-    chevron.classList.toggle("lit", lit);
-  }
+  cell.setAttribute(
+    "aria-label",
+    `${hint.face} turn, ${hint.state === "half" ? "half" : "quarter"}`,
+  );
+  chevrons.forEach((chevron, index) => chevron.classList.toggle("lit", index < litCount));
 }
 
 // The last token in history is the single source of truth for the hint; reset
@@ -679,12 +662,7 @@ async function main() {
     buildStructureCards();
     setupTabs();
     moveNames = Array.from(cube.move_names());
-    // Derive each hint once from the real wasm move effect on SOLVED, so the
-    // arrows follow the facelet permutation rather than a hand-written table.
-    const solved = Uint8Array.from(cube.solved_facelets());
-    hintMap = deriveHints(moveNames, (token) =>
-      Uint8Array.from(cube.apply_facelets(solved, token)),
-    );
+    hintMap = deriveHints(moveNames);
     buildMoveButtons();
     wireEvents();
     setNetVisible(true);

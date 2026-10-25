@@ -220,7 +220,7 @@ main {
     border-color 120ms ease;
 }
 
-.turn-hint[data-axis="vertical"] {
+.turn-hint[data-axis="column"] {
   flex-direction: column;
   gap: 0.3em;
 }
@@ -243,23 +243,6 @@ main {
   color: #fff;
   opacity: 1;
   text-shadow: 0 0 6px rgb(255 255 255 / 0.6);
-}
-
-/* F and R are interior, so their hint is a small unobtrusive in-face overlay. */
-.face-hint {
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  padding: 1px 3px;
-  border-radius: 4px;
-  background: rgb(7 10 14 / 0.62);
-  border-color: rgb(255 255 255 / 0.18);
-  font-size: clamp(0.42rem, 1.1vw, 0.68rem);
-  pointer-events: none;
-}
-
-.face-hint .chev {
-  opacity: 0.7;
 }
 
 @media (prefers-reduced-motion: reduce) {
