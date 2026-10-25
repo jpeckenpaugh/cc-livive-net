@@ -64,7 +64,13 @@
         <div class="button-row">
           <button id="scramble" type="button">Scramble</button>
           <button id="solve" type="button">Solve</button>
-          <button id="play" type="button" disabled>Play solution</button>
+          <select id="play-speed" aria-label="Play solution speed" disabled>
+            <option value="">Play solution</option>
+            <option value="1">1 move/s</option>
+            <option value="2">2 moves/s</option>
+            <option value="4">4 moves/s</option>
+            <option value="8">8 moves/s</option>
+          </select>
           <button id="reset" type="button">Reset</button>
         </div>
 

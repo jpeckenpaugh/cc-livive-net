@@ -8,7 +8,7 @@ import { createRenderer } from "./renderer.js";
 
 const FACES = ["U", "R", "F", "D", "L", "B"];
 const COLOR_LETTERS = ["U", "D", "F", "B", "R", "L"];
-const PAIR_DELAY_MS = 110;
+const DEFAULT_PLAY_RATE = 4;
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 const DEFAULT_REPO = "https://github.com/jpeckenpaugh/cc-livive-net";
 const ARRAY_LENGTHS = { cp: 8, co: 8, ep: 12, eo: 12 };
@@ -28,13 +28,14 @@ const solverTime = document.querySelector("#solver-time");
 const sequenceInput = document.querySelector("#sequence");
 const conformanceOutput = document.querySelector("#conformance");
 const paletteToggle = document.querySelector("#cb-toggle");
-const playButton = document.querySelector("#play");
+const playSelect = document.querySelector("#play-speed");
 
 const state = {
   facelets: new Uint8Array(0),
   history: [],
   solution: [],
   playing: false,
+  playRate: DEFAULT_PLAY_RATE,
 };
 
 let moveNames = [];
@@ -309,14 +310,20 @@ function buildHintCell(face, hint) {
   cell.setAttribute("role", "img");
   cell.setAttribute("aria-label", `${face} turn hint, at rest`);
 
-  // Both chevrons point the same way, outward from the centre of the net.
-  for (let i = 0; i < 2; i += 1) {
-    const chevron = document.createElement("span");
-    chevron.className = "chev";
-    chevron.setAttribute("aria-hidden", "true");
-    chevron.textContent = hint.glyph;
-    cell.append(chevron);
-  }
+  // One outward arrow at rest. A half turn reveals the opposed arrow, so the
+  // pair means "180°", not "faster".
+  const outward = document.createElement("span");
+  outward.className = "chev";
+  outward.setAttribute("aria-hidden", "true");
+  outward.textContent = hint.glyph;
+  cell.append(outward);
+
+  const opposed = document.createElement("span");
+  opposed.className = "chev opposite";
+  opposed.setAttribute("aria-hidden", "true");
+  opposed.textContent = hint.opposite;
+  opposed.hidden = true;
+  cell.append(opposed);
   return cell;
 }
 
@@ -324,6 +331,7 @@ function deriveHintForFace(face) {
   return {
     axis: face === "U" || face === "D" ? "row" : "column",
     glyph: { U: "\u25B2", D: "\u25BC", L: "\u25C0", B: "\u25B6" }[face],
+    opposite: { U: "\u25BC", D: "\u25B2", L: "\u25B6", B: "\u25C0" }[face],
   };
 }
 
@@ -331,8 +339,9 @@ function buildNetHints(fragment) {
   for (const face of PERIMETER_FACES) {
     const cells = [];
     const hint = deriveHintForFace(face);
-    PERIMETER_LAYOUT[face].forEach(([rowStart, colStart, rowEnd, colEnd]) => {
+    PERIMETER_LAYOUT[face].forEach(([rowStart, colStart, rowEnd, colEnd], slot) => {
       const cell = buildHintCell(face, hint);
+      cell.dataset.hintSlot = String(slot);
       cell.style.gridArea = `${rowStart} / ${colStart} / ${rowEnd} / ${colEnd}`;
       cells.push(cell);
       fragment.append(cell);
@@ -365,20 +374,21 @@ function buildNet() {
 }
 
 function applyHint(cell, hint) {
-  const chevrons = cell.querySelectorAll(".chev");
+  const [outward, opposed] = cell.querySelectorAll(".chev");
   if (!hint) {
     cell.dataset.state = "rest";
     cell.setAttribute("aria-label", `${cell.dataset.hintFace} turn hint, at rest`);
-    for (const chevron of chevrons) chevron.classList.remove("lit");
+    outward.classList.remove("lit");
+    opposed.hidden = true;
+    opposed.classList.remove("lit");
     return;
   }
-  const litCount = hint.state === "half" ? 2 : 1;
+  const half = hint.state === "half";
   cell.dataset.state = hint.state;
-  cell.setAttribute(
-    "aria-label",
-    `${hint.face} turn, ${hint.state === "half" ? "half" : "quarter"}`,
-  );
-  chevrons.forEach((chevron, index) => chevron.classList.toggle("lit", index < litCount));
+  cell.setAttribute("aria-label", `${hint.face} turn, ${half ? "half" : "quarter"}`);
+  outward.classList.add("lit");
+  opposed.hidden = !half;
+  opposed.classList.toggle("lit", half);
 }
 
 // The last token in history is the single source of truth for the hint; reset
@@ -388,7 +398,9 @@ function updateHints() {
   const hint = token === undefined ? undefined : hintMap[token];
   for (const [face, cells] of hintCells.entries()) {
     const cellHint = hint && hint.face === face ? hint : undefined;
-    for (const cell of cells) applyHint(cell, cellHint);
+    // The three cells are one indicator strip; only the centre marks the
+    // active row/column, so all three no longer light in unison.
+    cells.forEach((cell, index) => applyHint(cell, index === 1 ? cellHint : undefined));
   }
 }
 
@@ -427,7 +439,7 @@ function refresh() {
   updateHints();
   moveCount.textContent = String(state.history.length);
   solutionLength.textContent = state.solution.length > 0 ? String(state.solution.length) : "—";
-  playButton.disabled = state.playing || state.solution.length === 0;
+  playSelect.disabled = state.playing || state.solution.length === 0;
   updateInspector();
 }
 
@@ -506,13 +518,16 @@ function solve() {
 }
 
 function playbackDelay() {
-  return REDUCED_MOTION.matches ? 0 : PAIR_DELAY_MS;
+  if (REDUCED_MOTION.matches) return 0;
+  const rate = state.playRate || DEFAULT_PLAY_RATE;
+  return Math.round(1000 / rate);
 }
 
-async function play() {
+async function play(rate = DEFAULT_PLAY_RATE) {
   if (state.playing || state.solution.length === 0) return;
+  state.playRate = rate;
   state.playing = true;
-  setStatus("playing solution…");
+  setStatus(`playing solution at ${rate} move${rate === 1 ? "" : "s"}/s…`);
   refresh();
   try {
     for (const token of state.solution) {
@@ -528,6 +543,7 @@ async function play() {
     fail(error);
   } finally {
     state.playing = false;
+    playSelect.value = "";
     refresh();
   }
 }
@@ -582,7 +598,10 @@ function setNetVisible(show) {
 function wireEvents() {
   document.querySelector("#scramble").addEventListener("click", scramble);
   document.querySelector("#solve").addEventListener("click", solve);
-  document.querySelector("#play").addEventListener("click", play);
+  playSelect.addEventListener("change", () => {
+    const rate = Number(playSelect.value);
+    if (rate > 0) void play(rate);
+  });
   document.querySelector("#reset").addEventListener("click", reset);
   document.querySelector("#apply-sequence").addEventListener("click", () => {
     applySequence(sequenceInput.value);
