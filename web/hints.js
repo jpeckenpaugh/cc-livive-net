@@ -1,23 +1,21 @@
 // Net turn hints (workstream C). Pure presentation logic: no cube state and no
 // wasm import.
 //
-// Twelve cells sit outside the net, three per edge. Both chevrons in a cell
-// point the same way, away from the centre of the net:
+// The net is 15 x 12. Eighteen cells sit outside it:
 //
-//   above U  ▲ ▲      below D  ▼ ▼
-//   left  L  ◀ ◀      right B  ▶ ▶
+//   above U   row 1: three ▲▲ (U2)     row 2: three ▲ (U)
+//   below D   row 12: three ▼ (D)
+//   left  L   column 1: three ◀ (L)
+//   right B   column 14: three ▶ (B)   column 15: three ▶▶ (B2)
 //
-// A quarter turn lights one chevron; a half turn lights both. The group tells
-// you which row/column is turning and the count tells you the amplitude.
-// F and R are interior faces and deliberately have no hint cells.
-
-export const PERIMETER_FACES = ["U", "D", "L", "B"];
+// A single arrow is a quarter turn, two chevrons are a half turn. Every cell
+// is a button that applies its move. L2 and D2 deliberately have no cells.
 
 const GROUPS = {
-  U: { glyph: "▲", axis: "row" },
-  D: { glyph: "▼", axis: "row" },
-  L: { glyph: "◀", axis: "column" },
-  B: { glyph: "▶", axis: "column" },
+  U: [1, 2],
+  D: [1],
+  L: [1],
+  B: [1, 2],
 };
 
 const POWER_SUFFIX = /['2]/gu;
@@ -26,17 +24,13 @@ export function faceOfToken(token) {
   return token.replace(POWER_SUFFIX, "");
 }
 
-/// Returns `null` for faces that have no perimeter hint (F and R).
+/// Returns `null` for faces/amplitudes that have no perimeter cells
+/// (F, R, L2, D2).
 export function deriveHint(token) {
   const face = faceOfToken(token);
-  const group = GROUPS[face];
-  if (group === undefined) return null;
-  return {
-    face,
-    glyph: group.glyph,
-    axis: group.axis,
-    state: token.endsWith("2") ? "half" : "quarter",
-  };
+  const power = token.endsWith("2") ? 2 : 1;
+  if (!GROUPS[face]?.includes(power)) return null;
+  return { face, power, state: power === 2 ? "half" : "quarter" };
 }
 
 export function deriveHints(moveNames) {

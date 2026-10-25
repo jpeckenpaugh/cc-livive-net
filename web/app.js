@@ -3,7 +3,7 @@
 // sends that snapshot back with a move string and stores the new result. The
 // canvas renderer adds camera state, never move logic.
 import init, * as cube from "./pkg/color_cube_wasm.js";
-import { deriveHints, PERIMETER_FACES } from "./hints.js";
+import { deriveHints } from "./hints.js";
 import { createRenderer } from "./renderer.js";
 
 const FACES = ["U", "R", "F", "D", "L", "B"];
@@ -44,16 +44,21 @@ let renderer = null;
 let lastError = null;
 let netVisible = true;
 let hintMap = {};
-const hintCells = new Map();
+const hintCells = [];
 
 // Perimeter hint cells live in the four 3×3 bands around the cross. Each cell
 // spans the band's full depth so the 12 cells tile the bands exactly.
-const PERIMETER_LAYOUT = {
-  U: [1, 5, 2, 8],
-  L: [5, 1, 8, 2],
-  B: [5, 14, 8, 15],
-  D: [11, 5, 12, 8],
-};
+const HINT_GLYPHS = { U: "\u25B2", D: "\u25BC", L: "\u25C0", B: "\u25B6" };
+
+// [face, power, grid area] for the eighteen hint buttons (15 x 12 net).
+const HINT_LAYOUT = [
+  ["U", 2, [1, 5, 2, 6]], ["U", 2, [1, 6, 2, 7]], ["U", 2, [1, 7, 2, 8]],
+  ["U", 1, [2, 5, 3, 6]], ["U", 1, [2, 6, 3, 7]], ["U", 1, [2, 7, 3, 8]],
+  ["L", 1, [6, 1, 7, 2]], ["L", 1, [7, 1, 8, 2]], ["L", 1, [8, 1, 9, 2]],
+  ["D", 1, [12, 5, 13, 6]], ["D", 1, [12, 6, 13, 7]], ["D", 1, [12, 7, 13, 8]],
+  ["B", 1, [6, 14, 7, 15]], ["B", 1, [7, 14, 8, 15]], ["B", 1, [8, 14, 9, 15]],
+  ["B", 2, [6, 15, 7, 16]], ["B", 2, [7, 15, 8, 16]], ["B", 2, [8, 15, 9, 16]],
+];
 
 function setStatus(message, tone = "") {
   statusLine.textContent = message;
@@ -284,41 +289,28 @@ function setupTabs() {
   });
 }
 
-function buildHintCell(face, hint) {
-  const group = document.createElement("div");
-  group.className = `turn-hint hint-${face}`;
-  group.dataset.hintCell = "perimeter";
-  group.dataset.hintFace = face;
-  group.dataset.axis = hint.axis;
-  group.dataset.state = "rest";
-  group.setAttribute("role", "group");
-  group.setAttribute("aria-label", `${face} turn controls`);
-
-  // Two buttons, each with a single outward arrow: the first is the quarter
-  // turn, the second is the half turn (marked with 2).
-  for (const [token, power] of [[face, "1"], [`${face}2`, "2"]]) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "hint-move";
-    button.dataset.token = token;
-    button.dataset.power = power;
-    button.setAttribute("aria-label", `${face} ${power === "1" ? "quarter" : "half"} turn`);
-    const arrow = document.createElement("span");
-    arrow.className = "chev";
-    arrow.setAttribute("aria-hidden", "true");
-    arrow.textContent = hint.glyph;
-    button.append(arrow);
-    if (power === "2") {
-      const badge = document.createElement("span");
-      badge.className = "mult";
-      badge.textContent = "2";
-      badge.setAttribute("aria-hidden", "true");
-      button.append(badge);
-    }
-    button.addEventListener("click", () => applyHintMove(token));
-    group.append(button);
+function buildHintCell(face, power, area) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `turn-hint hint-${face}`;
+  button.dataset.hintCell = "perimeter";
+  button.dataset.hintFace = face;
+  button.dataset.power = String(power);
+  button.dataset.state = "rest";
+  button.style.gridArea = area.join(" / ");
+  button.setAttribute(
+    "aria-label",
+    `${face} ${power === 1 ? "quarter" : "half"} turn`,
+  );
+  for (let i = 0; i < power; i += 1) {
+    const chevron = document.createElement("span");
+    chevron.className = "chev";
+    chevron.setAttribute("aria-hidden", "true");
+    chevron.textContent = HINT_GLYPHS[face];
+    button.append(chevron);
   }
-  return group;
+  button.addEventListener("click", () => applyHintMove(power === 2 ? `${face}2` : face));
+  return button;
 }
 
 function applyHintMove(token) {
@@ -334,19 +326,10 @@ function applyHintMove(token) {
   }
 }
 
-function deriveHintForFace(face) {
-  return {
-    axis: face === "U" || face === "D" ? "row" : "column",
-    glyph: { U: "\u25B2", D: "\u25BC", L: "\u25C0", B: "\u25B6" }[face],
-  };
-}
-
 function buildNetHints(fragment) {
-  for (const face of PERIMETER_FACES) {
-    const [rowStart, colStart, rowEnd, colEnd] = PERIMETER_LAYOUT[face];
-    const cell = buildHintCell(face, deriveHintForFace(face));
-    cell.style.gridArea = `${rowStart} / ${colStart} / ${rowEnd} / ${colEnd}`;
-    hintCells.set(face, [cell]);
+  for (const [face, power, area] of HINT_LAYOUT) {
+    const cell = buildHintCell(face, power, area);
+    hintCells.push({ el: cell, face, power });
     fragment.append(cell);
   }
   return fragment;
@@ -374,17 +357,17 @@ function buildNet() {
   net.replaceChildren(fragment);
 }
 
-function applyHint(cell, hint) {
-  const buttons = cell.querySelectorAll(".hint-move");
-  const half = hint?.state === "half";
-  cell.dataset.state = hint ? hint.state : "rest";
+function applyHint(cell, active) {
+  cell.dataset.state = active ? "active" : "rest";
   cell.setAttribute(
     "aria-label",
-    `${cell.dataset.hintFace} turn controls, ${hint ? (half ? "half" : "quarter") : "at rest"}`,
+    `${cell.dataset.hintFace} ${cell.dataset.power === "1" ? "quarter" : "half"} turn${
+      active ? "" : ", at rest"
+    }`,
   );
-  buttons.forEach((button) => {
-    button.classList.toggle("lit", hint !== undefined && button.dataset.power === (half ? "2" : "1"));
-  });
+  for (const chevron of cell.querySelectorAll(".chev")) {
+    chevron.classList.toggle("lit", active);
+  }
 }
 
 // The last token in history is the single source of truth for the hint; reset
@@ -392,9 +375,10 @@ function applyHint(cell, hint) {
 function updateHints() {
   const token = state.history.at(-1);
   const hint = token === undefined ? undefined : hintMap[token];
-  for (const [face, cells] of hintCells.entries()) {
-    const cellHint = hint && hint.face === face ? hint : undefined;
-    for (const cell of cells) applyHint(cell, cellHint);
+  for (const cell of hintCells) {
+    const active =
+      hint !== undefined && hint !== null && hint.face === cell.face && hint.power === cell.power;
+    applyHint(cell.el, active);
   }
 }
 

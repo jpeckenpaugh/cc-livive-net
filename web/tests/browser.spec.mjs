@@ -79,16 +79,10 @@ async function readHints(page) {
     [...document.querySelectorAll("[data-hint-cell]")].map((cell) => ({
       cell: cell.dataset.hintCell,
       face: cell.dataset.hintFace,
-      slot: Number(cell.dataset.hintSlot),
-      axis: cell.dataset.axis,
+      power: Number(cell.dataset.power),
       state: cell.dataset.state,
       lit: cell.querySelectorAll(".chev.lit").length,
       glyphs: [...cell.querySelectorAll(".chev")].map((chevron) => chevron.textContent),
-      buttons: [...cell.querySelectorAll(".hint-move")].map((button) => ({
-        token: button.dataset.token,
-        power: button.dataset.power,
-        lit: button.classList.contains("lit"),
-      })),
       label: cell.getAttribute("aria-label"),
       classes: [...cell.classList],
     })),
@@ -255,77 +249,93 @@ async function run() {
     check(await page.locator("#cube").isVisible(), "canvas disappeared with the net");
   });
 
-  await attempt("each edge has exactly two single-arrow buttons", async () => {
+  await attempt("hint cells match the 15x12 layout and amplitudes", async () => {
     await page.locator("#reset").click();
-    const groups = await readHints(page);
-    check(groups.length === 4, `expected 4 hint groups, got ${groups.length}`);
-    for (const face of ["U", "D", "L", "B"]) {
-      const group = groups.filter((hint) => hint.face === face);
-      check(group.length === 1, `${face} edge has ${group.length} hint groups`);
-      check(group[0]?.buttons.length === 2, `${face} needs exactly two buttons`);
-      check(
-        group[0]?.buttons.map((button) => button.power).join(",") === "1,2",
-        `${face} buttons are not single/double`,
-      );
-      check(
-        group[0]?.buttons.every((button) => button.token === face || button.token === `${face}2`),
-        `${face} buttons carry the wrong tokens`,
-      );
-      check(
-        group[0]?.glyphs.length === 2 && new Set(group[0]?.glyphs).size === 1,
-        `${face} buttons must each hold one arrow in the same outward direction`,
-      );
-    }
-    const expectedGlyph = { U: "\u25B2", D: "\u25BC", L: "\u25C0", B: "\u25B6" };
-    for (const [face, glyph] of Object.entries(expectedGlyph)) {
-      const group = groups.find((hint) => hint.face === face);
-      check(group?.glyphs.every((g) => g === glyph), `${face} arrows do not point outward`);
-    }
+    const hints = await readHints(page);
+    check(hints.length === 18, `expected 18 hint cells, got ${hints.length}`);
+    const count = (face, power) =>
+      hints.filter((hint) => hint.face === face && hint.power === power).length;
+    check(count("U", 2) === 3 && count("U", 1) === 3, "U needs 3 double and 3 single cells");
+    check(count("D", 1) === 3 && count("D", 2) === 0, "D needs 3 single cells only");
+    check(count("L", 1) === 3 && count("L", 2) === 0, "L needs 3 single cells only");
+    check(count("B", 1) === 3 && count("B", 2) === 3, "B needs 3 single and 3 double cells");
     check(
-      groups.every((hint) => hint.state === "rest" && hint.lit === 0),
+      hints.every((hint) => hint.state === "rest" && hint.lit === 0),
       "hints are not dim at rest",
     );
+    check(
+      hints.every((hint) => hint.glyphs.length === hint.power),
+      "a cell must hold one chevron per power",
+    );
+    check(
+      hints.every((hint) => new Set(hint.glyphs).size === 1),
+      "chevrons in a cell must share one outward direction",
+    );
+    const expectedGlyph = { U: "\u25B2", D: "\u25BC", L: "\u25C0", B: "\u25B6" };
+    for (const [face, glyph] of Object.entries(expectedGlyph)) {
+      const cells = hints.filter((hint) => hint.face === face);
+      check(cells.every((hint) => hint.glyphs.every((g) => g === glyph)), `${face} arrows do not point outward`);
+    }
   });
 
-  await attempt("hint buttons apply quarter and double turns", async () => {
+  await attempt("hint cells apply quarter and double turns", async () => {
     await page.locator("#reset").click();
     const before = await page.evaluate(() => ({
       count: window.__cc.moveCount(),
       facelets: window.__cc.facelets(),
     }));
 
-    await page.locator('.hint-U .hint-move[data-power="1"]').click();
+    await page.locator('.hint-U[data-power="1"]').first().click();
     await page.waitForFunction((count) => window.__cc.moveCount() === count + 1, before.count);
     const afterQuarter = await page.evaluate(() => window.__cc.facelets());
     check(
       JSON.stringify(afterQuarter) !== JSON.stringify(before.facelets),
-      "clicking the single arrow did not turn the cube",
+      "clicking a single-arrow cell did not turn the cube",
     );
-    let groups = await readHints(page);
-    let group = groups.find((hint) => hint.face === "U");
+    let hints = await readHints(page);
     check(
-      group?.state === "quarter" && group?.buttons[0].lit && !group?.buttons[1].lit,
-      "single turn did not light the first button",
+      hints.filter((hint) => hint.face === "U" && hint.power === 1).every((hint) => hint.state === "active"),
+      "U did not light the three single cells",
+    );
+    check(
+      hints.filter((hint) => !(hint.face === "U" && hint.power === 1)).every((hint) => hint.state === "rest"),
+      "U lit cells outside the single row",
     );
 
-    await page.locator('.hint-U .hint-move[data-power="2"]').click();
+    await page.locator('.hint-U[data-power="2"]').first().click();
     await page.waitForFunction((count) => window.__cc.moveCount() === count + 2, before.count);
-    groups = await readHints(page);
-    group = groups.find((hint) => hint.face === "U");
+    hints = await readHints(page);
     check(
-      group?.state === "half" && group?.buttons[1].lit && !group?.buttons[0].lit,
-      "double turn did not light the second button",
+      hints.filter((hint) => hint.face === "U" && hint.power === 2).every((hint) => hint.state === "active"),
+      "U2 did not light the three double cells",
+    );
+    check(
+      hints.filter((hint) => hint.face === "U" && hint.power === 1).every((hint) => hint.state === "rest"),
+      "U2 left the single row lit",
     );
 
-    await page.locator('.hint-L .hint-move[data-power="1"]').click();
-    groups = await readHints(page);
-    group = groups.find((hint) => hint.face === "L");
-    check(group?.state === "quarter", "L button did not register a quarter turn");
+    await page.locator('.hint-B[data-power="2"]').first().click();
+    hints = await readHints(page);
+    check(
+      hints.filter((hint) => hint.face === "B" && hint.power === 2).every((hint) => hint.state === "active"),
+      "B2 did not light the outer column",
+    );
+    check(
+      hints.filter((hint) => hint.face === "B" && hint.power === 1).every((hint) => hint.state === "rest"),
+      "B2 left the inner column lit",
+    );
+
+    await page.locator('.hint-L[data-power="1"]').first().click();
+    hints = await readHints(page);
+    check(
+      hints.filter((hint) => hint.face === "L").every((hint) => hint.state === "active"),
+      "L did not light its three cells",
+    );
 
     await page.locator("#reset").click();
-    groups = await readHints(page);
+    hints = await readHints(page);
     check(
-      groups.every((hint) => hint.state === "rest" && hint.lit === 0),
+      hints.every((hint) => hint.state === "rest" && hint.lit === 0),
       "reset did not clear the hints",
     );
   });
@@ -338,23 +348,24 @@ async function run() {
     for (const token of moveNames) {
       await applyHintsMove(page, token);
       const expected = deriveHint(token);
-      const groups = await readHints(page);
+      const hints = await readHints(page);
       if (expected === null) {
-        check(groups.every((hint) => hint.state === "rest" && hint.lit === 0), `${token} must not light a hint`);
+        check(hints.every((hint) => hint.state === "rest" && hint.lit === 0), `${token} must not light a hint`);
         continue;
       }
-      const group = groups.find((hint) => hint.face === expected.face);
-      const power = expected.state === "half" ? "2" : "1";
+      const active = hints.filter(
+        (hint) => hint.face === expected.face && hint.power === expected.power,
+      );
+      check(active.length === 3, `${token}: expected three active cells`);
       check(
-        group?.state === expected.state &&
-          group?.buttons.find((button) => button.power === power)?.lit === true,
-        `${token}: hint is not ${expected.state}`,
+        active.every((hint) => hint.state === "active" && hint.lit === expected.power),
+        `${token}: cells are not active with ${expected.power} lit chevron(s)`,
       );
       check(
-        groups
-          .filter((hint) => hint.face !== expected.face)
+        hints
+          .filter((hint) => !(hint.face === expected.face && hint.power === expected.power))
           .every((hint) => hint.state === "rest"),
-        `${token}: lit hints outside ${expected.face}`,
+        `${token}: lit cells outside the expected row/column`,
       );
     }
   });
