@@ -73,26 +73,21 @@ async function sampleCanvas(page) {
   });
 }
 
-async function readHints(page) {
-  return page.evaluate(() =>
-    [...document.querySelectorAll("[data-hint-cell]")].map((cell) => ({
-      cell: cell.dataset.hintCell,
-      token: cell.dataset.hintToken,
-      power: Number(cell.dataset.power),
-      state: cell.dataset.state,
-      lit: cell.querySelectorAll(".chev.lit").length,
-      glyphs: [...cell.querySelectorAll(".chev")].map((chevron) => chevron.textContent),
-      label: cell.getAttribute("aria-label"),
-      classes: [...cell.classList],
-    })),
-  );
-}
-
 async function applyHintsMove(page, token) {
-  await page.locator("#reset").click();
+  const before = await page.evaluate(() => window.__cc.moveCount());
   await page.locator("#sequence").fill(token);
   await page.locator("#sequence").press("Enter");
-  await page.waitForFunction(() => window.__cc.moveCount() === 1);
+  await page.waitForFunction((count) => window.__cc.moveCount() === count + 1, before);
+}
+
+async function readTurns(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll(".face")].map((face) => ({
+      name: [...face.classList].find((name) => /^face-[URFDLB]$/.test(name))?.slice(5),
+      turn: face.dataset.turn ?? null,
+      outline: getComputedStyle(face).outlineStyle,
+    })),
+  );
 }
 
 async function run() {
@@ -248,81 +243,45 @@ async function run() {
     check(await page.locator("#cube").isVisible(), "canvas disappeared with the net");
   });
 
-  await attempt("all 18 moves have exactly one hint cell", async () => {
+  await attempt("the net is the compact cross with no hint cells", async () => {
     await page.locator("#reset").click();
-    const hints = await readHints(page);
-    const expected = [
-      "U", "U2", "U'", "R", "R2", "R'", "F", "F2", "F'",
-      "D", "D2", "D'", "L", "L2", "L'", "B", "B2", "B'",
+    check(
+      (await page.locator("[data-hint-cell]").count()) === 0,
+      "hint cells should be gone",
+    );
+    check((await page.locator(".face").count()) === 6, "expected six faces");
+    const turns = await readTurns(page);
+    check(turns.every((face) => face.turn === null), "a face is highlighted at rest");
+  });
+
+  await attempt("the last move outlines its face", async () => {
+    await page.locator("#reset").click();
+    const cases = [
+      ["U", "U", "quarter"],
+      ["U'", "U", "prime"],
+      ["U2", "U", "half"],
+      ["D", "D", "quarter"],
+      ["D2", "D", "half"],
+      ["L", "L", "quarter"],
+      ["F'", "F", "prime"],
+      ["R2", "R", "half"],
+      ["B", "B", "quarter"],
     ];
-    check(hints.length === 18, `expected 18 hint cells, got ${hints.length}`);
-    check(
-      [...hints.map((hint) => hint.token)].sort().join(" ") === [...expected].sort().join(" "),
-      `unexpected hint tokens: ${hints.map((hint) => hint.token).join(" ")}`,
-    );
-    check(
-      hints.every((hint) => hint.glyphs.length === hint.power),
-      "a cell must hold one chevron per power",
-    );
-    const expectedGlyphs = {
-      U: ["\u25C0"], "U'": ["\u25B6"], U2: ["\u25C0", "\u25B6"],
-      D: ["\u25B6"], "D'": ["\u25C0"], D2: ["\u25C0", "\u25B6"],
-      L: ["\u25BC"], "L'": ["\u25B2"], L2: ["\u25BC", "\u25B2"],
-      R: ["\u25B2"], "R'": ["\u25BC"], R2: ["\u25B2", "\u25BC"],
-      F: ["\u21BB"], "F'": ["\u21BA"], F2: ["\u21BB", "\u21BA"],
-      B: ["\u21BA"], "B'": ["\u21BB"], B2: ["\u21BA", "\u21BB"],
-    };
-    for (const hint of hints) {
-      check(
-        hint.glyphs.join("") === expectedGlyphs[hint.token].join(""),
-        `${hint.token} arrows are ${hint.glyphs.join("")}, expected ${expectedGlyphs[hint.token].join("")}`,
-      );
-    }
-    check(
-      hints.every((hint) => hint.state === "rest" && hint.lit === 0),
-      "hints are not dim at rest",
-    );
-  });
-
-  await attempt("only the cell for the last move lights", async () => {
-    await page.locator("#reset").click();
-    for (const token of ["U", "U'", "U2", "L", "R'", "B", "B2", "F", "D'"]) {
+    for (const [token, face, turn] of cases) {
       await applyHintsMove(page, token);
-      const hints = await readHints(page);
-      const active = hints.filter((hint) => hint.state === "active");
+      const turns = await readTurns(page);
+      const active = turns.filter((item) => item.turn !== null);
       check(
-        active.length === 1 && active[0].token === token,
-        `${token} lit ${active.map((hint) => hint.token).join(",") || "nothing"}`,
+        active.length === 1 && active[0].name === face && active[0].turn === turn,
+        `${token} highlighted ${active.map((item) => `${item.name}:${item.turn}`).join(",") || "nothing"}`,
       );
-      check(
-        active[0]?.lit === (token.endsWith("2") ? 2 : 1),
-        `${token} lit the wrong number of chevrons`,
-      );
+      if (turn === "prime") {
+        check(active[0].outline === "dashed", `${token} should use a dashed outline`);
+      }
     }
     await page.locator("#reset").click();
-    const rest = await readHints(page);
-    check(rest.every((hint) => hint.state === "rest"), "reset did not clear the hints");
-  });
-
-  await attempt("hint cells apply their own move", async () => {
-    await page.locator("#reset").click();
-    const before = await page.evaluate(() => window.__cc.moveCount());
-    await page.locator('.turn-hint[data-hint-token="U\'"]').click();
-    await page.waitForFunction((count) => window.__cc.moveCount() === count + 1, before);
-    let hints = await readHints(page);
-    let active = hints.filter((hint) => hint.state === "active");
-    check(active.length === 1 && active[0].token === "U'", "U' cell did not apply U'");
-
-    await page.locator('.turn-hint[data-hint-token="L2"]').click();
-    await page.waitForFunction((count) => window.__cc.moveCount() === count + 2, before);
-    hints = await readHints(page);
-    active = hints.filter((hint) => hint.state === "active");
-    check(active.length === 1 && active[0].token === "L2", "L2 cell did not apply L2");
-
-    await page.locator('.turn-hint[data-hint-token="B"]').click();
-    hints = await readHints(page);
-    active = hints.filter((hint) => hint.state === "active");
-    check(active.length === 1 && active[0].token === "B", "B cell did not apply B");
+    const rest = await readTurns(page);
+    check(rest.every((face) => face.turn === null), "reset did not clear the outline");
   });
 
   const dir = resolve("artifacts");

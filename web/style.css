@@ -170,14 +170,13 @@ main {
   display: none !important;
 }
 
-/* 15 × 12 unfolded net: eight hint cells above U, six right of B, three each
-   left of L and below D. */
+/* 12 × 9 unfolded net. The turned face gets the border highlight. */
 .net {
   display: grid;
-  grid-template-columns: repeat(15, minmax(0, 1fr));
-  grid-template-rows: repeat(12, minmax(0, 1fr));
-  gap: 2px;
-  aspect-ratio: 15 / 12;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(9, minmax(0, 1fr));
+  gap: 7px;
+  aspect-ratio: 12 / 9;
   max-height: min(70vh, 560px);
   margin: 0 auto;
   user-select: none;
@@ -192,75 +191,40 @@ main {
   padding: 3px;
   border-radius: 8px;
   background: #070a0e;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 120ms ease;
 }
 
-.face-U { grid-area: 3 / 5 / 6 / 8; }
-.face-L { grid-area: 6 / 2 / 9 / 5; }
-.face-F { grid-area: 6 / 5 / 9 / 8; }
-.face-R { grid-area: 6 / 8 / 9 / 11; }
-.face-B { grid-area: 6 / 11 / 9 / 14; }
-.face-D { grid-area: 9 / 5 / 12 / 8; }
+.face-U { grid-area: 1 / 4 / 4 / 7; }
+.face-L { grid-area: 4 / 1 / 7 / 4; }
+.face-F { grid-area: 4 / 4 / 7 / 7; }
+.face-R { grid-area: 4 / 7 / 7 / 10; }
+.face-B { grid-area: 4 / 10 / 7 / 13; }
+.face-D { grid-area: 7 / 4 / 10 / 7; }
 
-/* Turn hint buttons: one arrow for a quarter turn, two for a half turn, all
-   pointing outward from the net. Clicking applies the move. */
-.turn-hint {
-  appearance: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.06em;
-  min-width: 0;
-  padding: 0;
-  border-radius: 7px;
-  border: 1px solid #1d2836;
-  background: #0b1118;
-  color: #3b4a5d;
-  font-size: clamp(0.5rem, 1.5vw, 0.9rem);
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    color 120ms ease,
-    background 120ms ease,
-    border-color 120ms ease;
+/* A single outline is a quarter turn, dashed is a prime, a second ring is a
+   half turn. */
+.face[data-turn] {
+  outline-color: var(--accent);
 }
 
-.turn-hint:hover {
-  background: #131c26;
-  border-color: #33445a;
+.face[data-turn="prime"] {
+  outline-style: dashed;
 }
 
-.turn-hint:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.turn-hint[data-state="active"] {
-  border-color: #43536a;
-  background: #101923;
-}
-
-.turn-hint[data-power="2"] {
-  font-size: clamp(0.42rem, 1.15vw, 0.72rem);
-}
-
-.turn-hint .chev {
-  opacity: 0.55;
-  transition:
-    color 120ms ease,
-    opacity 120ms ease,
-    text-shadow 120ms ease;
-}
-
-.turn-hint .chev.lit {
-  color: #fff;
-  opacity: 1;
-  text-shadow: 0 0 6px rgb(255 255 255 / 0.6);
+.face[data-turn="half"]::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border: 2px solid var(--accent);
+  border-radius: 11px;
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .turn-hint,
-  .turn-hint .chev {
+  .face,
+  .face[data-turn="half"]::after {
     transition: none;
   }
 }

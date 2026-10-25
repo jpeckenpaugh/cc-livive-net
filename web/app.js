@@ -3,7 +3,6 @@
 // sends that snapshot back with a move string and stores the new result. The
 // canvas renderer adds camera state, never move logic.
 import init, * as cube from "./pkg/color_cube_wasm.js";
-import { HINT_LAYOUT, hintFor } from "./hints.js";
 import { createRenderer } from "./renderer.js";
 
 const FACES = ["U", "R", "F", "D", "L", "B"];
@@ -40,14 +39,10 @@ const state = {
 
 let moveNames = [];
 let stickers = [];
+const faceElements = new Map();
 let renderer = null;
 let lastError = null;
 let netVisible = true;
-const hintCells = [];
-
-// Perimeter hint cells live in the four 3×3 bands around the cross. Each cell
-// spans the band's full depth so the 12 cells tile the bands exactly.
-
 
 function setStatus(message, tone = "") {
   statusLine.textContent = message;
@@ -278,52 +273,6 @@ function setupTabs() {
   });
 }
 
-function buildHintCell(entry) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "turn-hint";
-  button.dataset.hintCell = "perimeter";
-  button.dataset.hintToken = entry.token;
-  button.dataset.power = String(entry.power);
-  button.dataset.state = "rest";
-  button.style.gridArea = entry.area.join(" / ");
-  button.setAttribute(
-    "aria-label",
-    `${entry.token} turn (${entry.power === 1 ? "quarter" : "half"})`,
-  );
-  for (const glyph of entry.glyphs) {
-    const chevron = document.createElement("span");
-    chevron.className = "chev";
-    chevron.setAttribute("aria-hidden", "true");
-    chevron.textContent = glyph;
-    button.append(chevron);
-  }
-  button.addEventListener("click", () => applyHintMove(entry.token));
-  return button;
-}
-
-function applyHintMove(token) {
-  if (state.playing) return;
-  try {
-    applyToken(token);
-    state.solution = [];
-    solverTime.textContent = "—";
-    refresh();
-    setStatus(`applied ${token}`);
-  } catch (error) {
-    fail(error);
-  }
-}
-
-function buildNetHints(fragment) {
-  for (const entry of HINT_LAYOUT) {
-    const cell = buildHintCell(entry);
-    hintCells.push({ el: cell, token: entry.token });
-    fragment.append(cell);
-  }
-  return fragment;
-}
-
 function buildNet() {
   const fragment = document.createDocumentFragment();
   for (let face = 0; face < 6; face += 1) {
@@ -331,6 +280,7 @@ function buildNet() {
     faceElement.className = `face face-${FACES[face]}`;
     faceElement.setAttribute("role", "group");
     faceElement.setAttribute("aria-label", `${FACES[face]} face`);
+    faceElements.set(FACES[face], faceElement);
     for (let offset = 0; offset < 9; offset += 1) {
       const sticker = document.createElement("div");
       sticker.className = "sticker";
@@ -342,28 +292,24 @@ function buildNet() {
     }
     fragment.append(faceElement);
   }
-  buildNetHints(fragment);
   net.replaceChildren(fragment);
 }
 
-function applyHint(cell, active) {
-  cell.dataset.state = active ? "active" : "rest";
-  cell.setAttribute(
-    "aria-label",
-    `${cell.dataset.hintToken} turn${active ? "" : ", at rest"}`,
-  );
-  for (const chevron of cell.querySelectorAll(".chev")) {
-    chevron.classList.toggle("lit", active);
-  }
-}
-
-// The last token in history is the single source of truth for the hint; reset
-// empties history, so the hints clear without a separate code path.
-function updateHints() {
+// The last move owns one border highlight: quarter = solid, prime = dashed,
+// half = double. History is the single source of truth, so reset clears it.
+function updateFaceHighlight() {
   const token = state.history.at(-1);
-  const hint = token === undefined ? null : hintFor(token);
-  for (const cell of hintCells) {
-    applyHint(cell.el, hint !== null && hint.token === cell.token);
+  const face = token === undefined ? null : token.replace(/['2]/gu, "");
+  const turn = token === undefined
+    ? null
+    : token.endsWith("2")
+      ? "half"
+      : token.endsWith("'")
+        ? "prime"
+        : "quarter";
+  for (const [name, element] of faceElements) {
+    if (name === face) element.dataset.turn = turn;
+    else delete element.dataset.turn;
   }
 }
 
@@ -399,7 +345,7 @@ function updateInspector() {
 
 function refresh() {
   render();
-  updateHints();
+  updateFaceHighlight();
   moveCount.textContent = String(state.history.length);
   solutionLength.textContent = state.solution.length > 0 ? String(state.solution.length) : "—";
   playSelect.disabled = state.playing || state.solution.length === 0;
